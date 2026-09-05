@@ -38,6 +38,7 @@
 *.exe
 *.out
 *.app
+/triopt
 
 # Build directories
 build/
@@ -50,11 +51,13 @@ CMakeCache.txt
 cmake_install.cmake
 Makefile
 install_manifest.txt
+CMakeUserPresets.json
 compile_commands.json
 
 # Temporary files
 *.tmp
 *.log
+!results/**/*.log
 *.bak
 *.swp
 

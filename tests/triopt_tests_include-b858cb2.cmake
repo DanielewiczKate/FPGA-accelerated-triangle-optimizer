@@ -1,0 +1,5 @@
+if(EXISTS "/home/kate/src/repos/FPGA-accelerated-triangle-optimizer/tests/triopt_tests_tests-b858cb2.cmake")
+  include("/home/kate/src/repos/FPGA-accelerated-triangle-optimizer/tests/triopt_tests_tests-b858cb2.cmake")
+else()
+  add_test(triopt_tests_NOT_BUILT-b858cb2 triopt_tests_NOT_BUILT-b858cb2)
+endif()
