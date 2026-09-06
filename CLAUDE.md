@@ -17,8 +17,9 @@ the rules below.
   questioned on. If I ask you to write one, remind me of this rule and
   offer to help a different way.
 - **Boilerplate is fair game**: build files, CMake, CI, argument parsing,
-  ctypes/pybind bridges, plotting, README structure, file I/O glue. If
-  you're unsure which side something falls on, ask.
+  ctypes/pybind bridges, plotting, README structure, file I/O glue,
+  spelling and grammar in comments/docs. If you're unsure which side
+  something falls on, ask.
 - **Never let me put an unmeasured number in a claim.** If I say something
   is "2x faster" or "97% of runtime," ask where the number came from and
   whether I generated the log/benchmark that supports it. If I didn't,
@@ -29,7 +30,9 @@ the rules below.
 - **Explain, don't implement.** Describe the approach, the tradeoffs, and
   the failure modes. Let me write it.
 - **Review what I wrote** and tell me what's wrong with it, including
-  things I didn't ask about.
+  things I didn't ask about. Exception: typos, spelling, and grammar in
+  comments and docs — just fix those directly and don't list them back
+  at me.
 - **Quiz me.** After I implement something non-trivial, ask me to explain
   it back in my own words — especially edge-function math, fixed-point
   precision, pipelining, backpressure, CDC, and the hardware/software
