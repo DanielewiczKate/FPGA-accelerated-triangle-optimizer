@@ -1,0 +1,2 @@
+utc,host,commit,seed,iters,runs,expected_sse,match,min_ms,median_ms,mean_ms,max_ms
+2026-09-06T06:37:41Z,archlinux,800cfff,1,8000,3,54798669,ALL MATCH,637,643,642,647
