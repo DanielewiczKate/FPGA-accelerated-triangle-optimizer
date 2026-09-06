@@ -1,4 +1,4 @@
-// Unit tests for the image module (src/image.{hpp,cpp}).
+// Unit tests for the SSE module (src/SSE.{hpp,cpp}).
 //
 // ---------------------------------------------------------------------------
 // doctest cheatsheet
@@ -34,7 +34,7 @@ TEST_CASE("compute_SSE: candidate is identical to target") {
     REQUIRE(compute_SSE(target, candidate) == 0);
 }
 
-TEST_CASE("compute_SSE: candidate is identical to target with differnt alpha") {
+TEST_CASE("compute_SSE: candidate is identical to target with different alpha") {
     // SSE should be 0
     ImageData target(10, 10, Color{0, 0, 0, 0});
     ImageData candidate(10, 10, Color{0, 0, 0, 255});
@@ -51,4 +51,35 @@ TEST_CASE("compute_SSE: full black target vs full white candidate") {
     REQUIRE(compute_SSE(target, candidate) == 10 * 10 * 255 * 255 * 3);
 }
 
+TEST_CASE("compute_SSE: indexing check on 2x2 image") {
+    ImageData target(2, 2);
+    ImageData candidate(2, 2);
 
+    Color* t = target.data();
+    Color* c = candidate.data();
+
+    t[0] = Color{128, 118,  52,  85};  c[0] = Color{128, 118,  52,  85};
+    t[1] = Color{ 10, 200, 255, 255};  c[1] = Color{ 40, 200, 100,   0};
+    t[2] = Color{  0,   0,   0, 255};  c[2] = Color{  5,   9,   1, 255};
+    t[3] = Color{255, 255, 255, 255};  c[3] = Color{  0, 255, 128, 255};
+
+    uint64_t px_0 =
+        (t[0].r - c[0].r) * (t[0].r - c[0].r) +
+        (t[0].g - c[0].g) * (t[0].g - c[0].g) +
+        (t[0].b - c[0].b) * (t[0].b - c[0].b);
+    uint64_t px_1 =
+        (t[1].r - c[1].r) * (t[1].r - c[1].r) +
+        (t[1].g - c[1].g) * (t[1].g - c[1].g) +
+        (t[1].b - c[1].b) * (t[1].b - c[1].b);
+    uint64_t px_2 =
+        (t[2].r - c[2].r) * (t[2].r - c[2].r) +
+        (t[2].g - c[2].g) * (t[2].g - c[2].g) +
+        (t[2].b - c[2].b) * (t[2].b - c[2].b);
+    uint64_t px_3 =
+        (t[3].r - c[3].r) * (t[3].r - c[3].r) +
+        (t[3].g - c[3].g) * (t[3].g - c[3].g) +
+        (t[3].b - c[3].b) * (t[3].b - c[3].b);
+
+    const uint64_t expected = px_0 + px_1 + px_2 + px_3;
+    REQUIRE(compute_SSE(target, candidate) == expected);
+}
