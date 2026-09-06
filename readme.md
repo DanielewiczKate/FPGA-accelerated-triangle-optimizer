@@ -7,25 +7,10 @@ As a baseline a pure C++ implementation is created, benchmarked and optimized.
 This system picks a random triangle, optimizes it to reduce the MSE between the target image and the candidate image.
 
 
-## Components
-### CLI definition
+# CLI definition
 The tool will be called using a CLI and controlled with a config.yaml file which will allow for different parameters and tests to be completed.
 
 ```
-Optimizer -i {input image path} -o {output image path} -c {config.yaml path}
+./triopt <target.png> <output.png> [iterations] [seed] [patience]
 ```
 
-### BMP Converter
-The first stage of the system is to get .BMP files from the user. This is performed using the stb_image library.
-
-### MSE calculation
-
-TODO
-
-### Renderer
-
-TODO
-
-# Testing and Validation
-
-TODO
