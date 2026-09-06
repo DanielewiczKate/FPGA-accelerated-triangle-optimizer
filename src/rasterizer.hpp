@@ -15,7 +15,7 @@
 /// the triangle is rendered on top of this opaque image, with
 /// alpha blending:
 /// data[i] = (data[i] * (255 - alpha) + triangle.color * alpha) / 255
-/// Where alpha = triangle.color.alpha
+/// Where alpha = triangle.color.a
 /// Note: this must be done with uint16_t to ensure that it will not
 /// overflow.
 /// ImageData's alpha values will not be mutated.
@@ -24,4 +24,6 @@
 /// affect the resulting image. While deterministic,
 /// it may have unintended visual effects. It is recommended to ensure
 /// triangles have non-zero area.
+///
+/// Inside-of-triangle is calculated using pixel corners (x, y), not centers.
 void RasterizeTriangle(ImageData& image, const Triangle& triangle);
