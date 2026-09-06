@@ -62,6 +62,7 @@ CTestTestfile.cmake
 !results/**/*.log
 *.bak
 *.swp
+tmp/
 
 # vcpkg
 vcpkg_installed/
