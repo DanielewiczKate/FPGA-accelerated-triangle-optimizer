@@ -3,6 +3,7 @@
 #include <vector>
 #include <cstdint>
 #include <cstddef>
+#include <algorithm>
 
 /// Defines the width of the vertex integers. These are pixel coordinates, with
 /// the top and left being 0.
@@ -20,15 +21,32 @@ struct Color {
 };
 static_assert(sizeof(Color) == 4, "Color must be tightly packed for stb");
 
+// Bounding box in pixel coordinates
+struct PixelBounds {
+    pcrd_t x_min = 0;
+    pcrd_t x_max = 0;
+    pcrd_t y_min = 0;
+    pcrd_t y_max = 0;
+};
+
 /// Singular triangle, including color and vertex position
 ///
 /// Triangles are stored as pixel coordinates. Triangle vertices must not
 /// fall outside of the range of an image. This must be asserted by user.
-struct Triangle {
+class Triangle {
+public:
+    PixelBounds bounds() const {
+        auto [x_min_it, x_max_it] = std::minmax_element(verts_x.begin(), verts_x.end());
+        auto [y_min_it, y_max_it] = std::minmax_element(verts_y.begin(), verts_y.end());
+
+        return {*x_min_it, *x_max_it, *y_min_it, *y_max_it};
+    }
     std::array<pcrd_t, 3> verts_x = {};
     std::array<pcrd_t, 3> verts_y = {};
     Color color;
 };
+
+
 
 /// Class for raw pixel data of images
 ///

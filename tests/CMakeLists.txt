@@ -7,6 +7,7 @@ add_executable(triopt_tests
     test_main.cpp
     test_image.cpp
     test_SSE.cpp
+    test_rasterizer.cpp
 )
 target_link_libraries(triopt_tests PRIVATE triopt_core doctest)
 target_compile_options(triopt_tests PRIVATE ${TRIOPT_WARNINGS})
