@@ -23,6 +23,7 @@
 #include "doctest.h"
 
 #include "common.hpp"
+#include "rasterizer.hpp"
 #include "SSE.hpp"
 
 
@@ -82,4 +83,45 @@ TEST_CASE("compute_SSE: indexing check on 2x2 image") {
 
     const uint64_t expected = px_0 + px_1 + px_2 + px_3;
     REQUIRE(compute_SSE(target, candidate) == expected);
+}
+
+TEST_CASE("compute_delta_SSE: delta inequality works") {
+    // compute_SSE(target, candidate) = compute_SSE(target, prev_best) +
+    //     compute_delta_SSE(target, prev_best, candidate, bounding_box)
+
+    const int N = 32;
+    ImageData target(N, N);
+    {
+        Triangle tri;
+
+        tri.verts_x = {N - 1, N - 1, 0};
+        tri.verts_y = {N - 1, 0, N - 1};
+        tri.color = {255, 0, 0, 255};
+
+        RasterizeTriangle(target, tri);
+    }
+
+    ImageData prev_best(N, N);
+    {
+        Triangle tri;
+
+        tri.verts_x = {N - 1, N - 1, 0};
+        tri.verts_y = {N - 1, 0, N - 1};
+        tri.color = {128, 0, 0, 255}; // right shape wrong shade
+
+        RasterizeTriangle(prev_best, tri);
+    }
+
+    ImageData candidate(N, N);
+    Triangle tri;
+
+    tri.verts_x = {N - 1, N - 1, 0};
+    tri.verts_y = {N - 1, 0, N - 1};
+    tri.color = {255, 10, 0, 128};
+
+    RasterizeTriangle(candidate, tri);
+
+    REQUIRE(compute_SSE(target, candidate) ==
+            compute_SSE(target, prev_best) +
+            compute_delta_SSE(target, prev_best, candidate, tri.bounds()));
 }

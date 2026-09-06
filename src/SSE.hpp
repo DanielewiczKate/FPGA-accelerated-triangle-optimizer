@@ -23,3 +23,17 @@
 /// y_size() must both be less than 9,724,315. This is less than the pcrd_t max
 /// so, this is not an issue.
 uint64_t compute_SSE(const ImageData& target, const ImageData& candidate);
+
+
+/// Take a target image, the previous best, and a candidate image.
+///
+/// This retunts the change is MSE that is observerd by moving from prev_best
+/// to the candidate. The following equality shows how these are related:
+/// compute_SSE(target, candidate) = compute_SSE(target, prev_best) +
+///     compute_delta_SSE(target, prev_best, candidate, bounding_box)
+/// Where bounding box is the regeion of candidate that may be different from
+/// prev_best.
+///
+/// All of the restrictions applicable to compuse_SSE apply to this.
+uint64_t compute_delta_SSE(const ImageData& target, const ImageData& prev_best,
+    const ImageData& candidate, const PixelBounds bounds);
