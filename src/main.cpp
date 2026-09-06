@@ -40,11 +40,15 @@
 //    Still no population/crossover or retry cap -- those live in the reference
 //    C project this is modelled on.
 //
-//  Deliberately naive, for baseline measurement:
-//    * full O(W*H) image copy  every step   -- incremental canvas replaces this
-//    * full O(W*H) SSE rescan  every step   -- delta-SSE / FPGA path replaces this
-//  Those two costs are exactly what the efficiency and pipelining work is
-//  meant to remove, so they are left in as the reference to measure against.
+//  Scoring is incremental (compute_delta_SSE): a candidate differs from the
+//  canvas only inside the proposed triangle's bounding box, so SSE is updated
+//  as best_sse + delta over that box -- O(bbox), not O(W*H). Result is
+//  bit-identical to a full rescan (integer squared-error deltas, no rounding).
+//
+//  Still deliberately naive in one place: a full O(W*H) image copy every step
+//  (`ImageData trial = best`). Removing that needs a bbox-scoped rasterize or
+//  a callback form of the rasterizer; left as the next efficiency step and the
+//  reference the incremental-canvas version is measured against.
 // ============================================================================
 
 #include "common.hpp"
@@ -300,7 +304,13 @@ int main(int argc, char** argv) {
 
         ImageData trial = best;                          // O(W*H) copy
         RasterizeTriangle(trial, cand);                  // writes only the bbox
-        const uint64_t trial_sse = compute_SSE(target, trial);  // O(W*H) rescan
+
+        // `trial` differs from `best` only inside the triangle's bounding box,
+        // so score it incrementally: best_sse + sum over that box of
+        // (new per-pixel error - old per-pixel error). O(bbox), not O(W*H).
+        // The full copy above is now the only O(W*H) cost left per step.
+        const uint64_t trial_sse =
+            best_sse + compute_delta_SSE(target, best, trial, cand.bounds());
 
         // Beat the pending triangle if there is one, otherwise the canvas.
         const uint64_t bar = pending ? pending_sse : best_sse;
