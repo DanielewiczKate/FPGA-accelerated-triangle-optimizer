@@ -53,6 +53,8 @@ Makefile
 install_manifest.txt
 CMakeUserPresets.json
 compile_commands.json
+CTestTestfile.cmake
+/tests/triopt_tests_*.cmake
 
 # Temporary files
 *.tmp
@@ -70,3 +72,5 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+/tests/triopt_tests
+/tests/test_cpy.png

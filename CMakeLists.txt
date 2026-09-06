@@ -27,6 +27,7 @@ set(TRIOPT_WARNINGS -Wall -Wextra -Wpedantic)
 # test binary link the exact same objects instead of recompiling sources.
 add_library(triopt_core STATIC
     src/image.cpp
+    src/SSE.cpp
 )
 target_include_directories(triopt_core PUBLIC src)
 target_link_libraries(triopt_core PRIVATE stb)
