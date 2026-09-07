@@ -1,12 +1,7 @@
 #!/usr/bin/env python
-# SPDX-License-Identifier: CERN-OHL-S-2.0
 """
-
-Copyright (c) 2020-2025 FPGA Ninja, LLC
-
-Authors:
-- Alex Forencich
-
+Based on works by: Dan Gisselquist
+See https://github.com/ZipCPU/wb2axip/blob/master/rtl/easyaxil.v
 """
 
 import itertools
