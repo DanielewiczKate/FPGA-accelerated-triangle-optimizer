@@ -1,8 +1,9 @@
-import common::*;
-
-module AXILiteWorker #(
+module AXILiteWorker
+  import common::*;
+  #(
   parameter integer C_AXI_DATA_WIDTH=32, // must be 32 (decode assumes 32-bit words)
-  parameter integer C_AXI_ADDR_WIDTH=6   // 4 index bits after ADDRLSB -> up to 16 regs
+  parameter integer C_AXI_ADDR_WIDTH=6,   // 4 index bits after ADDRLSB -> up to 16 regs
+  parameter integer C_AXI_STREAM_WIDTH=64
   )(
     input  wire          s_axi_aclk, // Clock
     input  wire          s_axi_aresetn, // Active low reset
@@ -46,12 +47,33 @@ module AXILiteWorker #(
     input   wire  [63:0]  delta_sse,  // result; readable at SSE_LO / SSE_HI.
 
     output triangle_t triangle, // candidate triangle
-    output vertex_t max_coord // bbox max, assuming 0,0 min
+    output vertex_t max_coord, // bbox max, assuming 0,0 min
+
+    ////////////////////////////////////////////////////////////////////////////
+    // AXI STREAM
+    ////////////////////////////////////////////////////////////////////////////
+
+    // Note the null and valid systems are not implmemented to reduce
+    // computaion requirements
+    input logic s_axi_tvalid,
+    output wire s_axi_tready,
+    input  wire  [C_AXI_STREAM_WIDTH-1:0] s_axi_tdata, // 64 bit stream databus
+    input wire s_axi_tlast,
+
+    output logic pixel_valid,
+    output logic pixel_last,
+    input logic render_ready,
+
+    output var color_t t_col,
+    output var color_t b_col
   );
 
-  wire _unused = &{1'b0, s_axi_awprot, s_axi_arprot};
+
 
   localparam integer ADDRLSB = $clog2(C_AXI_DATA_WIDTH)-3;
+
+  wire _unused = &{1'b0, s_axi_awprot, s_axi_arprot,
+                 s_axi_awaddr[ADDRLSB-1:0], s_axi_araddr[ADDRLSB-1:0]};
 
   // Register map. Word index = s_axi_a{W,R}ADDR[C_AXI_ADDR_WIDTH-1:ADDRLSB].
   localparam [3:0]
@@ -253,6 +275,24 @@ module AXILiteWorker #(
   // Register to output
   assign max_coord = vertex_t'(max_coords);
   assign triangle = triangle_t'({c_tri_col, c_tri_v2, c_tri_v1, c_tri_v0});
+
+  assign s_axi_tready = render_ready;
+  always_ff @(posedge s_axi_aclk)
+    // reset
+  if (!s_axi_aresetn)
+  begin
+    pixel_valid <= 1'b0;
+    pixel_last <= 1'b0;
+  end
+  else begin
+    pixel_valid <= (s_axi_tvalid && s_axi_tready);
+    pixel_last <= (s_axi_tvalid && s_axi_tready && s_axi_tlast);
+
+    if(s_axi_tvalid && s_axi_tready)
+    begin
+      {t_col, b_col} <= s_axi_tdata;
+    end
+  end
 
   // TODO: formal tests
 endmodule
