@@ -42,3 +42,48 @@ void RasterizeTriangle(ImageData& image, const Triangle& triangle) {
         }
     }
 }
+
+void RasterizeTriangleV2(ImageData& image, const Triangle& triangle) {
+    pcrd_t x_size = image.x_size();
+    pcrd_t y_size = image.y_size();
+    const PixelBounds tri_bounds = triangle.bounds();
+    if (tri_bounds.x_max >= x_size) std::abort();
+    if (tri_bounds.y_max >= y_size) std::abort();
+    const auto& vx = triangle.verts_x;
+    const auto& vy = triangle.verts_y;
+    const Color col = triangle.color;
+    Color* data = image.data();
+
+    // Per-edge step deltas (constant across the whole triangle).
+    const int64_t A0 = (int64_t)vy[1] - vy[0], B0 = (int64_t)vx[0] - vx[1];
+    const int64_t A1 = (int64_t)vy[2] - vy[1], B1 = (int64_t)vx[1] - vx[2];
+    const int64_t A2 = (int64_t)vy[0] - vy[2], B2 = (int64_t)vx[2] - vx[0];
+
+    // Edge function values at (x_min, y_min) — the only multiplies needed.
+    int64_t d0_row = (int64_t)(tri_bounds.x_min - vx[0]) * A0
+                    - (int64_t)(tri_bounds.y_min - vy[0]) * (vx[1] - vx[0]);
+    int64_t d1_row = (int64_t)(tri_bounds.x_min - vx[1]) * A1
+                    - (int64_t)(tri_bounds.y_min - vy[1]) * (vx[2] - vx[1]);
+    int64_t d2_row = (int64_t)(tri_bounds.x_min - vx[2]) * A2
+                    - (int64_t)(tri_bounds.y_min - vy[2]) * (vx[0] - vx[2]);
+
+    for (pcrd_t y = tri_bounds.y_min; y <= tri_bounds.y_max; y++) {
+        int64_t d0 = d0_row, d1 = d1_row, d2 = d2_row;
+        size_t row_i = (size_t)y * x_size;
+
+        for (pcrd_t x = tri_bounds.x_min; x <= tri_bounds.x_max; x++) {
+            if ((d0 >= 0 && d1 >= 0 && d2 >= 0) || (d0 <= 0 && d1 <= 0 && d2 <= 0)) {
+                size_t i = row_i + x;
+                Color new_col;
+                uint16_t alpha = col.a;
+                new_col.r = (data[i].r * (255 - alpha) + col.r * alpha) / 255;
+                new_col.g = (data[i].g * (255 - alpha) + col.g * alpha) / 255;
+                new_col.b = (data[i].b * (255 - alpha) + col.b * alpha) / 255;
+                new_col.a = data[i].a;
+                data[i] = new_col;
+            }
+            d0 += A0; d1 += A1; d2 += A2;
+        }
+        d0_row += B0; d1_row += B1; d2_row += B2;
+    }
+}

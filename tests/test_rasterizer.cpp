@@ -5,6 +5,50 @@
 #include "doctest.h"
 #include "rasterizer.hpp"
 #include "SSE.hpp"
+#include <vector>
+
+
+const std::vector<Triangle> TEST_TRIANGLES_N32 = {
+    // verts_x        verts_y        color (r,g,b,a)
+    { {10, 12, 12}, {0, 12, 30}, {255, 0, 0, 255} },
+    { {0, 0, 0},    {0, 0, 0},    {0, 255, 0, 255} },
+};
+
+void assert_equal_image_data(ImageData& a, ImageData& b) {
+    size_t size = a.size();
+    Color* data_a = a.data();
+    Color* data_b = b.data();
+
+    int acc = 0;
+    for (size_t i = 0; i < size; i++) {
+        acc += data_a[i].r != data_b[i].r;
+        acc += data_a[i].g != data_b[i].g;
+        acc += data_a[i].b != data_b[i].b;
+        acc += data_a[i].a != data_b[i].a;
+    }
+    REQUIRE(acc == 0);
+}
+void compare_rasterizer_versions(
+        void (*v1)(ImageData&, const Triangle&),
+        void (*v2)(ImageData&, const Triangle&),
+        ImageData& image,
+        Triangle tri) {
+
+    ImageData image_cpy = image;
+    v1(image, tri);
+    v2(image_cpy, tri);
+    assert_equal_image_data(image, image_cpy);
+
+}
+TEST_CASE("RasterizeTriangle: assert equal image data helper") {
+    ImageData image(2, 2);
+    Triangle tri;
+    tri.verts_x = {0, 1, 1};
+    tri.verts_y = {0, 0, 1};
+    tri.color = {255, 255, 255, 255 - 100}; // SSE counts pixels in this case
+
+    assert_equal_image_data(image, image);
+}
 TEST_CASE("RasterizeTriangle: alpha blending") {
     ImageData image(2, 2);
     Triangle tri;
@@ -99,3 +143,19 @@ TEST_CASE("RasterizeTriangle: alpha preservation") {
 
     REQUIRE(image.data()[0].a == 128);
 }
+
+
+TEST_CASE("RasterizeTriangleV2: V2 matches V1") {
+    const int N = 32;
+    ImageData image(N, N);
+    for(auto t : TEST_TRIANGLES_N32) {
+        compare_rasterizer_versions(
+                RasterizeTriangle,
+                RasterizeTriangleV2,
+                image,
+                t);
+    }
+}
+
+
+
