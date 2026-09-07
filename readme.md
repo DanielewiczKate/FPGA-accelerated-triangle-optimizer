@@ -80,6 +80,37 @@ triangles refine, so the delta scan cost falls while the full rescan stays
 flat. The remaining per-proposal O(W*H) cost is the `ImageData trial = best`
 copy; removing it is the next step.
 
+## Benchmark: `RasterizeTriangle` vs `RasterizeTriangleV2`
+
+`RasterizeTriangleV2` computes the three edge functions with running sums
+(one add per pixel per edge) instead of a fresh cross product per pixel. Same
+integer blend, same corner-sampled coverage rule, so it must be byte-identical
+to `RasterizeTriangle` on every input; `RasterizeTriangle` stays the golden
+model.
+
+**Equivalence.** `ctest` is 18 cases, including `RasterizeTriangleV2: V2
+matches V1` (rasterize the same triangle set with both, assert identical
+pixels). Swapping V2 into the optimizer's scoring path leaves the seed-`1` /
+8000-iteration final SSE at `54798669` unchanged — the determinism gate is a
+free end-to-end check that V2 is bit-exact.
+
+**Wall time**, `tests/mona_lisa_256.png`, seed `1`, 8000 proposals, Release,
+one machine, one session, commit `f9b9f8e`, median of 5:
+
+| scoring-path rasterizer | wall time | speedup |
+| --- | --- | --- |
+| `RasterizeTriangle` (V1) | 641 ms | 1.00x |
+| `RasterizeTriangleV2` | 476 ms | 1.35x |
+
+This is A/B on one commit with only the rasterize call swapped, so the ~165 ms
+is V2's effect and nothing else. It is whole-optimizer wall time, not an
+isolated rasterize microbenchmark — V2's share of the win tracks how many
+pixels the proposals cover, which is large early (fresh triangles span much of
+the canvas) and shrinks as triangles refine. Not comparable to the
+`golden-model` / `delta-ssh-model` table above: that varies the SSE scan, this
+varies the rasterizer. The `golden` / `delta` numbers there were taken before
+this swap.
+
 # FPGA accelerator
 
 The hardware target is the per-proposal scoring inner loop: given a candidate
