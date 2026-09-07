@@ -21,9 +21,23 @@ trim_trailing_whitespace = false
 [{Makefile,*.mk}]
 indent_style = tab
 
-# SystemVerilog: 2-space is the dominant convention (lowRISC, Google styles).
+# SystemVerilog: 2-space is the dominant convention (lowRISC, Google styles),
+# 100-col line length to match. EditorConfig only covers whitespace basics -
+# actual formatting is verible-verilog-format (see .rules.verible_lint).
 [*.{v,sv,svh}]
+indent_style = space
 indent_size = 2
+tab_width = 2
+max_line_length = 100
+
+# Xilinx constraints and build/Tcl scripts: spaces, 4-wide (Vivado's own style).
+[*.{xdc,tcl,xdc.template}]
+indent_style = space
+indent_size = 4
+
+# Simulator file lists (one path/arg per line) - leave content untouched.
+[*.f]
+trim_trailing_whitespace = false
 
 # Vendored code keeps its upstream formatting - never reformat on save.
 [third_party/**]
