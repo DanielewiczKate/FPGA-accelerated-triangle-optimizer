@@ -27,3 +27,12 @@
 ///
 /// Inside-of-triangle is calculated using pixel corners (x, y), not centers.
 void RasterizeTriangle(ImageData& image, const Triangle& triangle);
+
+/// Incremental-edge-function variant of RasterizeTriangle.
+///
+/// Must produce output byte-identical to RasterizeTriangle for every input
+/// (same edge functions, same integer blend, no rounding differences) — it
+/// only changes how the edge values are computed (running sums instead of a
+/// fresh cross product per pixel). Kept alongside the reference for
+/// differential testing; RasterizeTriangle stays the golden model.
+void RasterizeTriangleV2(ImageData& image, const Triangle& triangle);

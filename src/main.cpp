@@ -303,7 +303,7 @@ int main(int argc, char** argv) {
                 : error_weighted_triangle(rng, target, error_cdf, w, h);
 
         ImageData trial = best;                          // O(W*H) copy
-        RasterizeTriangle(trial, cand);                  // writes only the bbox
+        RasterizeTriangleV2(trial, cand);                // writes only the bbox
 
         // `trial` differs from `best` only inside the triangle's bounding box,
         // so score it incrementally: best_sse + sum over that box of
