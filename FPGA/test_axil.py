@@ -15,6 +15,7 @@ from cocotb.triggers import RisingEdge, Timer
 from cocotbext.axi import AxiLiteBus, AxiLiteMaster
 
 from dataclasses import dataclass
+
 RW_REGS = {
     "MAXC":    0x08,
     "TRI_V0":  0x0C,
@@ -115,11 +116,24 @@ class TB(object):
 def cycle_pause():
     return itertools.cycle([1, 1, 1, 0])
 
-@cocotb.test()
-async def write_read_all_regs(dut):
+
+def with_stalls(fn):
+    """Run the test 4x: no stalls, idle only, backpressure only, both."""
+    return cocotb.test()(
+        cocotb.parametrize(
+            ("idle_inserter", [None, cycle_pause]),
+            ("backpressure_inserter", [None, cycle_pause]),
+        )(fn)
+    )
+
+
+@with_stalls
+async def write_read_all_regs(dut, idle_inserter, backpressure_inserter):
 
     tb = TB(dut)
     await tb.cycle_reset()
+    tb.set_idle_generator(idle_inserter)
+    tb.set_backpressure_generator(backpressure_inserter)
 
     def pattern(i, addr):
         return 0xA5000000 | (i << 16) | addr
@@ -132,11 +146,13 @@ async def write_read_all_regs(dut):
         want = pattern(i, addr)
         assert got == want, f"{name}@{addr:#04x}: got {got:#010x} want {want:#010x}"
 
-@cocotb.test()
-async def reset_regs(dut):
+@with_stalls
+async def reset_regs(dut, idle_inserter, backpressure_inserter):
 
     tb = TB(dut)
     await tb.cycle_reset()
+    tb.set_idle_generator(idle_inserter)
+    tb.set_backpressure_generator(backpressure_inserter)
 
     def pattern(i, addr):
         return 0xA5000000 | (i << 16) | addr
@@ -150,11 +166,16 @@ async def reset_regs(dut):
         got = int.from_bytes((await tb.axil_master.read(addr, 4)).data, "little")
         want = 0
         assert got == want, f"{name}@{addr:#04x}: got {got:#010x} want {want:#010x}"
+@cocotb.test(skip=True)
+async def partial_writes(dut):
+    """WSTRB sub-word writes: driver issues full-word writes only, not exercised."""
 
-@cocotb.test()
-async def write_delta_sse_and_read(dut):
+@with_stalls
+async def write_delta_sse_and_read(dut, idle_inserter, backpressure_inserter):
     tb = TB(dut)
     await tb.cycle_reset()
+    tb.set_idle_generator(idle_inserter)
+    tb.set_backpressure_generator(backpressure_inserter)
     test_value = 0xDEADBEEF_CAFEBABE
     dut.delta_sse.value = test_value
 
@@ -165,10 +186,12 @@ async def write_delta_sse_and_read(dut):
     assert got == test_value, f"delta_sse {test_value:#018x} -> read {got:#018x}"
 
 
-@cocotb.test()
-async def passthough_packing(dut):
+@with_stalls
+async def passthough_packing(dut, idle_inserter, backpressure_inserter):
     tb = TB(dut)
     await tb.cycle_reset()
+    tb.set_idle_generator(idle_inserter)
+    tb.set_backpressure_generator(backpressure_inserter)
 
     expected_maxc = Vertex(123, 42)
 
@@ -188,3 +211,24 @@ async def passthough_packing(dut):
                                expected_maxc.to_word().to_bytes(4, "little"))
     got = Triangle.from_int(int(dut.triangle.value))
     assert got == expected_tri
+
+@with_stalls
+async def ctrl_start_pulse(dut, idle_inserter, backpressure_inserter):
+    tb = TB(dut)
+    await tb.cycle_reset()
+    tb.set_idle_generator(idle_inserter)
+    tb.set_backpressure_generator(backpressure_inserter)
+
+    highs = []
+    async def mon():
+        while True:
+            await RisingEdge(dut.s_axi_aclk)
+            highs.append(int(dut.start.value))
+
+    t = cocotb.start_soon(mon())
+    await tb.axil_master.write(0x00, (1).to_bytes(4, "little"))
+    await RisingEdge(dut.s_axi_aclk)
+    t.cancel()
+
+    assert sum(highs) == 1, f"start high for {sum(highs)} cycles, want 1"
+    assert int.from_bytes((await tb.axil_master.read(0x00, 4)).data, "little") == 0
