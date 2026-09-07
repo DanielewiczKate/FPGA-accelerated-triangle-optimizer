@@ -10,9 +10,9 @@ import random
 
 import cocotb
 from cocotb.clock import Clock
-from cocotb.triggers import RisingEdge, Timer
+from cocotb.triggers import RisingEdge, Timer, ReadOnly
 
-from cocotbext.axi import AxiLiteBus, AxiLiteMaster
+from cocotbext.axi import AxiLiteBus, AxiLiteMaster, AxiStreamSource, AxiStreamBus
 
 from dataclasses import dataclass
 
@@ -89,6 +89,14 @@ class TB(object):
             reset_active_level=False,
         )
 
+        self.axil_stream = AxiStreamSource(
+            AxiStreamBus.from_prefix(dut, "s_axi"),
+            dut.s_axi_aclk, dut.s_axi_aresetn,
+            reset_active_level=False,
+        )
+
+        dut.render_ready.value = 0 # this must not be floating or the stream fails
+
     def set_idle_generator(self, generator=None):
         if generator:
             self.axil_master.write_if.aw_channel.set_pause_generator(generator())
@@ -112,6 +120,21 @@ class TB(object):
         await RisingEdge(self.dut.s_axi_aclk)
         await RisingEdge(self.dut.s_axi_aclk)
 
+def mix64(x: int) -> int:
+    m = (1 << 64) - 1
+    x = (x + 0x9E3779B97F4A7C15) & m
+    x = ((x ^ (x >> 30)) * 0xBF58476D1CE4E5B9) & m
+    x = ((x ^ (x >> 27)) * 0x94D049BB133111EB) & m
+    return x ^ (x >> 31)
+
+async def monitor(dut, clk, signals, out, gate=None):
+    """Append a tuple of `signals` values to `out` each rising edge.
+    If `gate` is given, only append on cycles where that signal is 1."""
+    while True:
+        await RisingEdge(clk)
+        await ReadOnly()                      # let this edge's NBA updates settle
+        if gate is None or getattr(dut, gate).value == 1:
+            out.append(tuple(int(getattr(dut, s).value) for s in signals))
 
 def cycle_pause():
     return itertools.cycle([1, 1, 1, 0])
@@ -232,3 +255,60 @@ async def ctrl_start_pulse(dut, idle_inserter, backpressure_inserter):
 
     assert sum(highs) == 1, f"start high for {sum(highs)} cycles, want 1"
     assert int.from_bytes((await tb.axil_master.read(0x00, 4)).data, "little") == 0
+
+@cocotb.test()
+async def pixel_stream_data(dut):
+    tb = TB(dut)
+    await tb.cycle_reset()
+
+    beats = []
+    mon = cocotb.start_soon(
+        monitor(dut, dut.s_axi_aclk,
+        ["t_col", "b_col"],
+        beats, gate="pixel_valid")
+    )
+
+    dut.render_ready.value = 1
+    for i in range(10):
+        await tb.axil_stream.send(mix64(i).to_bytes(8, "little"))
+
+    await tb.axil_stream.wait()            # block until all frames transmitted
+    await RisingEdge(dut.s_axi_aclk)       # pixel_valid for the last beat registers
+    await RisingEdge(dut.s_axi_aclk)       # monitor samples it
+
+    mon.cancel()
+    for i in range(10):
+        assert (beats[i][0] << 32 | beats[i][1]) == mix64(i)
+
+
+@cocotb.test()
+async def pixel_stream_data_backpressure(dut):
+    tb = TB(dut)
+    await tb.cycle_reset()
+
+    beats = []
+    mon = cocotb.start_soon(
+        monitor(dut, dut.s_axi_aclk,
+        ["t_col", "b_col"],
+        beats, gate="pixel_valid")
+    )
+
+    dut.render_ready.value = 1
+    for i in range(0, 10):
+        await tb.axil_stream.send(mix64(i).to_bytes(8, "little"))
+
+    await Timer(2, "ns")
+    dut.render_ready.value = 0
+    await Timer(2, "ns")
+    dut.render_ready.value = 1
+
+    await tb.axil_stream.wait()            # block until all frames transmitted
+    await RisingEdge(dut.s_axi_aclk)       # pixel_valid for the last beat registers
+    await RisingEdge(dut.s_axi_aclk)       # monitor samples it
+
+    mon.cancel()
+    for i in range(10):
+        assert (beats[i][0] << 32 | beats[i][1]) == mix64(i)
+
+
+
