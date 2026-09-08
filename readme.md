@@ -279,8 +279,5 @@ model.
   nor is the top level that wires the interface, the master, the worker, and
   `PixelIndexer` (`FPGA/PixelIndexer.sv`, a standalone raster-order coordinate
   generator) into one datapath.
-- `RasterizerMaster.render_ready` is currently tied high after reset
-  (`TODO: remove testing only`); real precompute-done gating and the
-  `pixel_last` path are not wired.
 - No measured hardware-vs-CPU comparison exists. Any throughput claim is
   pending a cycle model or synthesis numbers.

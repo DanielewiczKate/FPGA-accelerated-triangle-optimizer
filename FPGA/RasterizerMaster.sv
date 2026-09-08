@@ -139,7 +139,7 @@ module RasterizerMaster
     end
   end
   else begin
-    render_ready <= 1; // TODO: remove testing only
+    render_ready <= 1; // Allows for one cycle to prime the input
     if(advance)
     begin
       x <= x_next;
