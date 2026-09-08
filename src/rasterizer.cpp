@@ -1,5 +1,14 @@
 #include "rasterizer.hpp"
 #include <cstdlib>
+#ifdef DUMP
+#include <iostream>
+#include <string>
+#include <format>
+#include <fstream>
+#ifndef TRIOPT_DUMP_PATH          // set by CMake -DTRIOPT_DUMP=ON to an absolute path
+#define TRIOPT_DUMP_PATH "render_dump.txt"
+#endif
+#endif
 
 void RasterizeTriangle(ImageData& image, const Triangle& triangle) {
     pcrd_t x_size = image.x_size();
@@ -67,6 +76,10 @@ void RasterizeTriangleV2(ImageData& image, const Triangle& triangle) {
     int64_t d2_row = (int64_t)(tri_bounds.x_min - vx[2]) * A2
                     - (int64_t)(tri_bounds.y_min - vy[2]) * (vx[0] - vx[2]);
 
+#ifdef DUMP
+    std::string dump_output = "[";
+#endif
+
     for (pcrd_t y = tri_bounds.y_min; y <= tri_bounds.y_max; y++) {
         int64_t d0 = d0_row, d1 = d1_row, d2 = d2_row;
         size_t row_i = (size_t)y * x_size;
@@ -81,9 +94,22 @@ void RasterizeTriangleV2(ImageData& image, const Triangle& triangle) {
                 new_col.b = (data[i].b * (255 - alpha) + col.b * alpha) / 255;
                 new_col.a = data[i].a;
                 data[i] = new_col;
+
+#ifdef DUMP
+                dump_output += std::format("({}, {}, {}, {}),",
+                        i, d0, d1, d2);
+#endif
             }
             d0 += A0; d1 += A1; d2 += A2;
         }
         d0_row += B0; d1_row += B1; d2_row += B2;
     }
+#ifdef DUMP
+    dump_output += "]";
+    {
+        std::ofstream f(TRIOPT_DUMP_PATH);
+        if (!f) std::abort();  // dir missing or path unwritable
+        f << dump_output << '\n';
+    }
+#endif
 }

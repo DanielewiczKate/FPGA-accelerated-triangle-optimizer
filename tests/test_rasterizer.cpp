@@ -157,5 +157,16 @@ TEST_CASE("RasterizeTriangleV2: V2 matches V1") {
     }
 }
 
+TEST_CASE("Dump Triangles") {
+    const int N = 32;
+    ImageData image(N, N);
+    Triangle tri;
+
+    tri.verts_x = {0, N - 1, N - 1};
+    tri.verts_y = {0, 0, N - 1};
+    tri.color = {255, 255, 255, 128}; // SSE counts pixels in this case
+    RasterizeTriangleV2(image, tri);
+}
+
 
 
