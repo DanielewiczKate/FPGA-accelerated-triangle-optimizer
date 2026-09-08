@@ -10,9 +10,9 @@ package common;
         color_t color;
         vertex_t [2:0] verts;
     } triangle_t;
-    // sigend 9 bit int. Usefull for char subtractions
+    // signed 17 bit int. Useful for char subtractions
     typedef logic signed [16:0] s17_t;
-    // signed 33 bit int. This is used for edge calcualation in
+    // signed 33 bit int. This is used for edge calculation in
     // the render system
     typedef logic signed [32:0] s33_t;
 endpackage

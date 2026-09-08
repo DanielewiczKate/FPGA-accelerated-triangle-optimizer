@@ -9,7 +9,7 @@ module PixelIndexer
     // master
     input vertex_t max_coord,
 
-    // Strobe indicating that the pixel currently sored in coord has been
+    // Strobe indicating that the pixel currently stored in coord has been
     // used, and the next cycle will process the next coordinate
     input logic pixel_done,
     input logic pixel_valid,

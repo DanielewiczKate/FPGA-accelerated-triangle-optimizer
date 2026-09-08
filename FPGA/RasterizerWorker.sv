@@ -1,8 +1,8 @@
 module RasterizerWorker
   import common::*;
   (
-    input logic clk, // active low
-    input logic rst,
+    input logic clk,
+    input logic rst, // active low
 
     // From AXILite worker
     input logic pixel_valid,
@@ -63,12 +63,12 @@ module RasterizerWorker
       end
   endfunction
 
-  // From RasterizeMaster
-  // The only pixels we have to consiter are the pixels which satisfy:
+  // From RasterizerMaster
+  // The only pixels we have to consider are the pixels which satisfy:
   //
   // ((d0 >= 0 && d1 >= 0 && d2 >= 0) || (d0 <= 0 && d1 <= 0 && d2 <= 0))
   //
-  // Then the following can be computer per channel to get the resutant sse
+  // Then the following can be computed per channel to get the resultant sse
   //
   //  c_col.r = (t_col.r*(255-alpha) + tri_col.r*alpha) / 255
   //
@@ -85,6 +85,6 @@ module RasterizerWorker
   // q * 32897 fits in 32 bits for q <= 65025.
   //
   //  This results in 7 multiplies per pixel. These are multiply reduced forms,
-  //  see src/rasterizer.cpp and src/sse.cpp for the full algorythem
+  //  see src/rasterizer.cpp and src/sse.cpp for the full algorithm
 
 endmodule
