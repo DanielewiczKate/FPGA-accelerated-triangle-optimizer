@@ -1,7 +1,5 @@
 module Rasterizer
   import common::*;
-  import RasterizerDispatch::*;
-  import RasterizerWorker::*;
   #(
     parameter integer NUM_LANES = 1
   ) (
