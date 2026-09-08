@@ -12,8 +12,20 @@ import re
 
 from cocotb.triggers import RisingEdge, Timer, ReadOnly
 from dataclasses import dataclass
+import ast
+from pathlib import Path
 
+DUMP_PATH = Path(__file__).resolve().parent.parent / "tests" / "data"
 _TOKEN = re.compile(r'([^.\[\]]+)|\[(\d+)\]')
+
+def load_dump(file):
+    return ast.literal_eval((DUMP_PATH / file).read_text())
+
+# we need this due to the strange bit sizes
+def as_signed(v, bits):
+    return v - (1 << bits) if v & (1 << (bits - 1)) else v
+
+
 
 def resolve(dut, path):
     """Resolve a signal spec to a handle: 'idx[0]', 'sub.bus[2].valid', 'mem[1][3]'."""

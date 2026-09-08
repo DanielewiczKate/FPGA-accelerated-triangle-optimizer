@@ -6,6 +6,7 @@ import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, Timer, ReadOnly
 from common import Color, Vertex, Triangle, monitor, mix64
+import common
 from cocotbext.axi import AxiLiteBus, AxiLiteMaster, AxiStreamSource, AxiStreamBus
 
 from dataclasses import dataclass
@@ -36,10 +37,11 @@ class TB(object):
 async def reset(dut):
     tb = TB(dut)
 
+    N = 32
     tri = Triangle(
-            Color(14, 124, 23, 43),
-            [Vertex(1, 21), Vertex(12, 23), Vertex(12, 11)])
-    max_coord = Vertex(32,32)
+            Color(255, 255, 255, 255),
+            [Vertex(0, 0), Vertex(N-1, 0), Vertex(N-1, N-1)])
+    max_coord = Vertex(N, N)
 
     dut.triangle.value = tri.to_int();
     dut.max_coord.value = max_coord.to_word();
@@ -64,4 +66,20 @@ async def reset(dut):
     dut.pixel_valid.value = 1
     for _ in range(10):
         await RisingEdge(dut.clk)
+    expected = common.load_dump("render_dump.txt")
+    beats = [
+        (idx, common.as_signed(s_d0, 33), common.as_signed(s_d1, 33), common.as_signed(s_d2, 33))
+        for idx, s_d0, s_d1, s_d2 in beats
+    ]
+
+    dut._log.info(beats)
+    dut._log.info(expected[0:10])
+    for i in range(10):
+        assert expected[i][0] == beats[i][0]
+        assert expected[i][1] == beats[i][1]
+        assert expected[i][2] == beats[i][2]
+        assert expected[i][3] == beats[i][3]
+
+
+
 

@@ -26,9 +26,9 @@ module RasterizerMaster
     output color_t b_col_out [NUM_LANES],
     output color_t tri_col_out [NUM_LANES],
 
-    output var s17_t s_d0 [NUM_LANES],
-    output var s17_t s_d1 [NUM_LANES],
-    output var s17_t s_d2 [NUM_LANES],
+    output var s33_t s_d0 [NUM_LANES],
+    output var s33_t s_d1 [NUM_LANES],
+    output var s33_t s_d2 [NUM_LANES],
     output var logic [15:0] idx [NUM_LANES]
   );
   vertex_t v0, v1, v2;
@@ -45,13 +45,13 @@ module RasterizerMaster
   assign v1 = triangle.verts[1];
   assign v2 = triangle.verts[2];
 
-  s17_t A0;
-  s17_t A1;
-  s17_t A2;
+  s33_t A0;
+  s33_t A1;
+  s33_t A2;
 
-  s17_t B0;
-  s17_t B1;
-  s17_t B2;
+  s33_t B0;
+  s33_t B1;
+  s33_t B2;
 
   s33_t d0_row;
   s33_t d1_row;
@@ -65,8 +65,8 @@ module RasterizerMaster
     A2 <= v0.y - v2.y;
 
     B0 <= v0.x - v1.x;
-    B0 <= v1.x - v2.x;
-    B0 <= v2.x - v0.x;
+    B1 <= v1.x - v2.x;
+    B2 <= v2.x - v0.x;
 
     // TODO change this to a mutiplexer, since this takes 6 multipliers. This
     // is done once per image, so no need to do it in a single frame
@@ -85,9 +85,9 @@ module RasterizerMaster
   s33_t d2_row_next;
 
 
-  s17_t s_d0_next [NUM_LANES];
-  s17_t s_d1_next [NUM_LANES];
-  s17_t s_d2_next [NUM_LANES];
+  s33_t s_d0_next [NUM_LANES];
+  s33_t s_d1_next [NUM_LANES];
+  s33_t s_d2_next [NUM_LANES];
   logic [15:0] idx_next [NUM_LANES];
 
   always_comb
@@ -113,9 +113,10 @@ module RasterizerMaster
   begin
     render_ready <= 0;
     for (int i = 0; i < NUM_LANES; i++) begin
-      s_d0[i] <= 0;
-      s_d1[i] <= 0;
-      s_d2[i] <= 0;
+
+      s_d0[i] <= -(v0.x * A0 + v0.y * B0);
+      s_d1[i] <= -(v1.x * A1 + v1.y * B1);
+      s_d2[i] <= -(v2.x * A2 + v2.y * B2);
       idx[i] <= 0;
     end
   end
