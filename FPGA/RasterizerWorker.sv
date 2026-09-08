@@ -17,7 +17,7 @@ module RasterizerWorker
     input var s33_t s_d2,
     input var logic [31:0] idx,
 
-    output logic signed [63:0] sse_acc
+    output var logic signed [63:0] sse_acc
 
     );
 
