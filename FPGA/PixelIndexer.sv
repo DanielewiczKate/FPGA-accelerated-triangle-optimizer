@@ -31,7 +31,7 @@ module PixelIndexer
 
   always_comb
   begin
-    if (coord.x + 1 >= max_coord.x)
+   if (coord.x + 1 >= max_coord.x)
     begin
       next_coord.x = '0;
       next_coord.y = (coord.y + 1 >= max_coord.y) ? '0 : coord.y + 1;
