@@ -1,7 +1,5 @@
 module FPGAAccelerator
   import common::*;
-  import AXILiteWorker::*;
-  import Rasterizer::*;
   #(
   parameter integer C_AXI_DATA_WIDTH=32, // must be 32 (decode assumes 32-bit words)
   parameter integer C_AXI_ADDR_WIDTH=6,   // 4 index bits after ADDRLSB -> up to 16 regs
@@ -63,8 +61,8 @@ module FPGAAccelerator
   wire pixel_last;
   wire render_ready;
 
-  wire color_t t_col;
-  wire color_t b_col;
+  wire color_t t_col [NUM_LANES];
+  wire color_t b_col [NUM_LANES];
 
 
   AXILiteWorker #(
@@ -124,14 +122,14 @@ module FPGAAccelerator
       .pixel_last     (pixel_last),
       .render_ready   (render_ready),
 
-      .t_col          (t_col),
-      .b_col          (b_col)
+      .t_col          (t_col[0]),
+      .b_col          (b_col[0])
     );
   Rasterizer #(
     .NUM_LANES (NUM_LANES)
     ) rasterizer (
       .clk            (s_axi_aclk),
-      .rst            (rst_render),
+      .rst            (s_axi_aresetn & ~rst_render),
 
       .pixel_valid    (pixel_valid),
       .pixel_last     (pixel_last),
