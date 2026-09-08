@@ -11,7 +11,7 @@ import random
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, Timer, ReadOnly
-
+from common import Color, Vertex, Triangle, monitor, mix64
 from cocotbext.axi import AxiLiteBus, AxiLiteMaster, AxiStreamSource, AxiStreamBus
 
 from dataclasses import dataclass
@@ -28,51 +28,6 @@ RO_REGS = {           # mirrors AXILiteWorker.sv register map; read-only, writes
     "SSE_LO": 0x1C,   # dut.delta_sse[31:0]
     "SSE_HI": 0x20,   # dut.delta_sse[63:32]
 }
-
-
-
-@dataclass
-class Color:                       # color_t: r=[31:24] g=[23:16] b=[15:8] a=[7:0]
-    r: int; g: int; b: int; a: int
-
-    def to_word(self) -> int:
-        return (self.r << 24) | (self.g << 16) | (self.b << 8) | self.a
-
-    @classmethod
-    def from_word(cls, w: int):
-        return cls((w >> 24) & 0xFF, (w >> 16) & 0xFF, (w >> 8) & 0xFF, w & 0xFF)
-
-
-@dataclass
-class Vertex:                      # vertex_t: x=[31:16] y=[15:0]
-    x: int; y: int
-
-    def to_word(self) -> int:
-        return ((self.x & 0xFFFF) << 16) | (self.y & 0xFFFF)
-
-    @classmethod
-    def from_word(cls, w: int):
-        return cls((w >> 16) & 0xFFFF, w & 0xFFFF)
-
-
-@dataclass
-class Triangle:                    # triangle_t: {color, verts[2:0]}, color is MSB
-    color: Color
-    verts: list                    # [v0, v1, v2]
-
-    def to_int(self) -> int:
-        return (self.color.to_word() << 96
-                | self.verts[2].to_word() << 64
-                | self.verts[1].to_word() << 32
-                | self.verts[0].to_word())
-
-    @classmethod
-    def from_int(cls, v: int):
-        return cls(
-            Color.from_word((v >> 96) & 0xFFFFFFFF),
-            [Vertex.from_word((v >> s) & 0xFFFFFFFF) for s in (0, 32, 64)],
-        )
-
 
 class TB(object):
     def __init__(self, dut):
@@ -120,21 +75,7 @@ class TB(object):
         await RisingEdge(self.dut.s_axi_aclk)
         await RisingEdge(self.dut.s_axi_aclk)
 
-def mix64(x: int) -> int:
-    m = (1 << 64) - 1
-    x = (x + 0x9E3779B97F4A7C15) & m
-    x = ((x ^ (x >> 30)) * 0xBF58476D1CE4E5B9) & m
-    x = ((x ^ (x >> 27)) * 0x94D049BB133111EB) & m
-    return x ^ (x >> 31)
 
-async def monitor(dut, clk, signals, out, gate=None):
-    """Append a tuple of `signals` values to `out` each rising edge.
-    If `gate` is given, only append on cycles where that signal is 1."""
-    while True:
-        await RisingEdge(clk)
-        await ReadOnly()                      # let this edge's NBA updates settle
-        if gate is None or getattr(dut, gate).value == 1:
-            out.append(tuple(int(getattr(dut, s).value) for s in signals))
 
 def cycle_pause():
     return itertools.cycle([1, 1, 1, 0])
@@ -309,6 +250,3 @@ async def pixel_stream_data_backpressure(dut):
     mon.cancel()
     for i in range(10):
         assert (beats[i][0] << 32 | beats[i][1]) == mix64(i)
-
-
-

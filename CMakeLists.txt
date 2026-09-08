@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 project(triopt LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -33,6 +33,18 @@ add_library(triopt_core STATIC
 target_include_directories(triopt_core PUBLIC src)
 target_link_libraries(triopt_core PRIVATE stb)
 target_compile_options(triopt_core PRIVATE ${TRIOPT_WARNINGS})
+
+# Render-trace dump. Compiles the DUMP instrumentation in src/rasterizer.cpp and
+# points it at a fixed, CWD-independent file. OFF by default so benchmark builds
+# are never affected; enable with `cmake -S . -B build -DTRIOPT_DUMP=ON`.
+option(TRIOPT_DUMP "compile the render-trace dump into the rasterizer" OFF)
+if(TRIOPT_DUMP)
+    file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/tests/data")
+    target_compile_definitions(triopt_core PRIVATE
+        DUMP
+        TRIOPT_DUMP_PATH="${CMAKE_SOURCE_DIR}/tests/data/render_dump.txt"
+    )
+endif()
 
 add_executable(triopt
     src/main.cpp

@@ -209,9 +209,117 @@ so the AXI4-Lite handshake is exercised under channel pauses on every side.
 | `pixel_stream_data_backpressure` | same, toggling `render_ready` to confirm no beats are dropped under stream backpressure |
 | `partial_writes` | skipped — `WSTRB` sub-word writes are out of scope (the driver issues full 32-bit words) |
 
+## `RasterizerMaster` — edge-function front end
+
+`FPGA/RasterizerMaster.sv` is the first stage of the compute datapath. It turns
+the decoded `triangle` + `max_coord` from `AXILiteWorker` into the per-pixel
+quantities a downstream `RenderWorker` needs, walking the bounding box in raster
+order and emitting one set of edge-function values per pixel. It is the RTL port
+of `RasterizeTriangleV2`'s incremental edge-function scheme (`src/rasterizer.cpp`).
+
+**Inputs**: `triangle`, `max_coord` (bbox max, `(0,0)` min assumed), the
+`pixel_valid` / `pixel_last` stream strobes, and the streamed `t_col` / `b_col`
+pixel pair (per lane). **Outputs**, per lane: `s_d0` / `s_d1` / `s_d2` — the
+three edge functions, `s33_t` = signed 33-bit — and `idx`, the linear pixel
+index, plus `t_col_out` / `b_col_out` / `tri_col_out` forwarded straight
+through. `render_ready` is the backpressure strobe back toward the stream sink.
+
+### Two-phase operation
+
+- **Precompute, once per triangle.** From the three vertices, register the
+  per-edge step constants — `A0..A2` (vertex-pair `Δy`) and `B0..B2`
+  (vertex-pair `−Δx`) — and the edge-function value at the bbox origin,
+  `d0_row..d2_row`. Those origin values are the *only* multiplies in the block
+  (six, and since this runs once per image they can be folded onto a single
+  time-shared multiplier — the `TODO` in the source).
+- **Per-pixel, incremental.** Each consumed pixel adds `A*` to the running edge
+  value (`s_d*`) and bumps `idx`. End of row is detected a cycle ahead by
+  `x + 1 >= max_coord.x`; on that boundary `x` wraps to 0 and the row
+  accumulators step by `B*` instead. One add per edge per pixel, no multiplies.
+  `y` is not tracked here — the stream master owns `max_coord.y` and end of
+  packet.
+
+`advance = pixel_valid && render_ready` gates every update, so the walk only
+moves on cycles where a pixel is actually consumed.
+
+The coverage test (`d0`, `d1`, `d2` all the same sign), the alpha blend, and the
+squared-error accumulate live in the block comment as the spec for the
+downstream `RenderWorker`; none of that is in this module.
+
+### Multi-lane
+
+`NUM_LANES` is a parameter for a future mode that processes several bbox rows in
+parallel by giving each lane its own `d*` / `idx` offset. It is `1` everywhere
+today; the per-lane loops are pass-throughs and lane routing is not implemented.
+
+### Verification
+
+cocotb, `FPGA/test_render_master.py`, `make render_master` (add `SIM=verilator`
+as elsewhere).
+
+Golden reference is `tests/data/render_dump.txt`: a list of `(idx, d0, d1, d2)`
+tuples dumped by the C++ `RasterizeTriangleV2` when built with `-DTRIOPT_DUMP=ON`
+(`dump.sh`, via the `Dump Triangles` ctest case). A `monitor` coroutine samples
+`idx` / `s_d0` / `s_d1` / `s_d2` on every `pixel_valid` cycle and the captured
+beats are compared against the dump, so the RTL edge-function walk is
+differentially tested against the same V2 rasterizer that is the C++ golden
+model.
+
+| test | checks |
+| --- | --- |
+| `single_row_test` | one 5×5 triangle, first bbox row only; assert the first 4 beats match the dump |
+| `multi_row_test` | same triangle, full 5×5 bbox; assert every captured beat matches the dump, in order |
+
+## `RasterizerWorker` — coverage test + blend + squared-error accumulate
+
+`FPGA/RasterizerWorker.sv` is the compute stage downstream of `RasterizerMaster`.
+It consumes the per-pixel edge functions and colour triple and folds each
+covered pixel into a running `delta_SSE`. This is the block the sections above
+call `RenderWorker`.
+
+**Inputs**: the `pixel_valid` strobe, the three edge functions
+`s_d0` / `s_d1` / `s_d2` (`s33_t`) and `idx` from `RasterizerMaster`, and the
+`t_col` / `b_col` / `tri_col` colour triple for that pixel. **Output**:
+`sse_acc[63:0]` — the accumulated signed squared-error delta.
+
+**Per pixel** (combinational except the accumulator):
+
+- `in_tri` — the coverage test: `s_d0` / `s_d1` / `s_d2` all `>= 0` or all `<= 0`.
+- `c_col` — the candidate colour after the integer alpha blend of `tri_col` over
+  `t_col`, `(t*(255-a) + tri*a)/255`. The `/255` is the `(x*32897) >> 23` magic
+  multiply from `RasterizeTriangleV2`, done unsigned in the `udiv255` function —
+  the numerator is always in `[0, 65025]`, so no sign handling is needed.
+- `diff_* = b_col - c_col` and `sum_* = 2*t_col - b_col - c_col` per channel;
+  `sse_acc += Σ diff*sum` on every `pixel_valid`. This is the multiply-reduced
+  `Δ(squared error) = (c - b)(c + b - 2t)` form — three multiplies per pixel
+  instead of six.
+
+### Verification
+
+cocotb, `FPGA/test_render_worker.py`, `make render_worker` (add `SIM=verilator`
+as elsewhere). The reference is the Python `Color` model in `FPGA/common.py`
+(`Color.rasterize` for the blend, `Color.delta_SSE` for the per-pixel error), not
+a direct run against the C++ `compute_delta_SSE`.
+
+| test | checks |
+| --- | --- |
+| `per_pixel_sse` | 50 random `t_col` / `b_col` / `tri_col` triples (seed `0xC0FFEE`); one clock after driving each, assert the combinational `px_sse` wire equals `Color.delta_SSE(t_col, b_col, Color.rasterize(t_col, tri_col))` |
+| `accumulator` | streams the same 50 triples, one per cycle, with `pixel_valid` held high; a `monitor` coroutine samples `sse_acc` on every `pixel_valid` edge, and the last sample must equal the running sum of the per-pixel deltas |
+
+Not yet covered: the `in_tri` coverage gate (both tests leave `s_d0` / `s_d1` /
+`s_d2` at 0, so `in_tri` is always true and every pixel accumulates), the
+`sse_acc` reset value, and the `idx` port.
+
 ## Status
 
-The interface block and its testbench exist; the compute datapath (edge-
-function rasteriser + streaming `delta_SSE` accumulator) is not yet
-implemented, and there is no measured hardware-vs-CPU comparison. Any
-throughput claim here is pending a cycle model or real synthesis numbers.
+- `AXILiteWorker` (bus / control interface) and `RasterizerMaster` (edge-
+  function front end) exist, each with a cocotb testbench.
+- `RasterizerWorker` — the coverage test + alpha blend + streaming squared-error
+  accumulator that consumes `RasterizerMaster`'s output — exists in RTL with a
+  cocotb testbench (`per_pixel_sse` and `accumulator`, both against the Python
+  `Color` model; the `in_tri` coverage gate is not yet exercised). The top level
+  that wires the interface, the master, the worker, and `PixelIndexer`
+  (`FPGA/PixelIndexer.sv`, a standalone raster-order coordinate generator) into
+  one datapath is not implemented.
+- No measured hardware-vs-CPU comparison exists. Any throughput claim is
+  pending a cycle model or synthesis numbers.
