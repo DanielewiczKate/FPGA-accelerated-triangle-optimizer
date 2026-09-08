@@ -67,6 +67,19 @@ class Color:                       # color_t: r=[31:24] g=[23:16] b=[15:8] a=[7:
     def from_word(cls, w: int) -> "Color":
         return cls((w >> 24) & 0xFF, (w >> 16) & 0xFF, (w >> 8) & 0xFF, w & 0xFF)
 
+    @staticmethod
+    def delta_SSE(target, best, candidate) -> int:
+        b_r = target.r - best.r
+        b_g = target.g - best.g
+        b_b = target.b - best.b
+        acc = -(b_r * b_r + b_g * b_g + b_b * b_b)
+
+        c_r = target.r - candidate.r
+        c_g = target.g - candidate.g
+        c_b = target.b - candidate.b
+        acc += c_r * c_r + c_g * c_g + c_b * c_b
+
+        return acc
 
 @dataclass
 class Vertex:                      # vertex_t: x=[31:16] y=[15:0]
