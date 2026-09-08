@@ -80,6 +80,23 @@ class Color:                       # color_t: r=[31:24] g=[23:16] b=[15:8] a=[7:
         acc += c_r * c_r + c_g * c_g + c_b * c_b
 
         return acc
+    @staticmethod
+    def _cdiv(num: int, den: int) -> int:
+        q, r = divmod(num, den)
+        if r and (num < 0) != (den < 0):
+            q += 1
+        return q
+
+    @staticmethod
+    def rasterize(target, col) -> "Color":
+        alpha = col.a
+        new_r = Color._cdiv(target.r * (255 - alpha) + col.r * alpha, 255)
+        new_g = Color._cdiv(target.g * (255 - alpha) + col.g * alpha, 255)
+        new_b = Color._cdiv(target.b * (255 - alpha) + col.b * alpha, 255)
+        new_a = target.a
+
+        return Color(new_r, new_g, new_b, new_a)
+
 
 @dataclass
 class Vertex:                      # vertex_t: x=[31:16] y=[15:0]

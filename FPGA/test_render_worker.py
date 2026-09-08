@@ -34,6 +34,7 @@ class TB(object):
         await RisingEdge(self.dut.clk)
 
 
+
 @cocotb.test()
 async def per_pixel_sse(dut):
     tb = TB(dut)
@@ -44,13 +45,16 @@ async def per_pixel_sse(dut):
 
     t_col = Color(25, 2, 12, 255)
     b_col = Color(75, 251, 52, 255)
-    c_col = Color(52, 31, 2, 255)
+    tri_col = Color(2, 1, 22, 55)
 
     dut.t_col.value = t_col.to_word()
-    dut.c_col.value = c_col.to_word()
     dut.b_col.value = b_col.to_word()
+    dut.tri_col.value = tri_col.to_word()
+
+    c_col = Color.rasterize(t_col, tri_col);
 
     # allow to settle
     await RisingEdge(dut.clk)
 
-    assert Color.delta_SSE(t_col, b_col, c_col) == dut.px_sse.value;
+    assert Color.delta_SSE(t_col, b_col, c_col) == dut.px_sse.value, 64
+

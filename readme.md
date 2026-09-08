@@ -270,14 +270,55 @@ model.
 | `single_row_test` | one 5×5 triangle, first bbox row only; assert the first 4 beats match the dump |
 | `multi_row_test` | same triangle, full 5×5 bbox; assert every captured beat matches the dump, in order |
 
+## `RasterizerWorker` — coverage test + blend + squared-error accumulate
+
+`FPGA/RasterizerWorker.sv` is the compute stage downstream of `RasterizerMaster`.
+It consumes the per-pixel edge functions and colour triple and folds each
+covered pixel into a running `delta_SSE`. This is the block the sections above
+call `RenderWorker`.
+
+**Inputs**: `pixel_valid` / `pixel_last` strobes, the three edge functions
+`s_d0` / `s_d1` / `s_d2` (`s33_t`) and `idx` from `RasterizerMaster`, and the
+`t_col` / `b_col` / `tri_col` colour triple for that pixel. **Output**:
+`sse_acc[63:0]` — the accumulated signed squared-error delta.
+
+**Per pixel** (combinational except the accumulator):
+
+- `in_tri` — the coverage test: `s_d0` / `s_d1` / `s_d2` all `>= 0` or all `<= 0`.
+- `c_col` — the candidate colour after the integer alpha blend of `tri_col` over
+  `t_col`, `t + a*(tri - t)/255`. The `/255` is the `(x*32897) >> 23` magic
+  multiply from `RasterizeTriangleV2`, sign-corrected in the `sdiv255` function.
+- `diff_* = b_col - c_col` and `sum_* = 2*t_col - b_col - c_col` per channel;
+  `sse_acc += Σ diff*sum` on every `pixel_valid`. This is the multiply-reduced
+  `Δ(squared error) = (c - b)(c + b - 2t)` form — three multiplies per pixel
+  instead of six.
+
+### Not done yet
+
+- The module still declares `module RasterizerMaster`, so `make render_worker`
+  cannot elaborate it (`COCOTB_TOPLEVEL = RasterizerWorker`) until it is renamed.
+- `in_tri` is computed but unused — the accumulate fires on every `pixel_valid`,
+  covered or not. Either gate the accumulate on `in_tri` or gate `pixel_valid`
+  upstream in the master.
+- `idx` and `pixel_last` are ports but are not read.
+- `FPGA/test_render_worker.py` is a stub (`TB` class only, no `@cocotb.test()`).
+  No differential check against the C++ `compute_delta_SSE` exists yet.
+
+### Verification
+
+cocotb, `FPGA/test_render_worker.py`, `make render_worker` (add `SIM=verilator`
+as elsewhere). Wired into the `Makefile` but not runnable until the items above
+are resolved.
+
 ## Status
 
 - `AXILiteWorker` (bus / control interface) and `RasterizerMaster` (edge-
   function front end) exist, each with a cocotb testbench.
-- `RenderWorker` — the coverage test + alpha blend + streaming squared-error
-  accumulator that consumes `RasterizerMaster`'s output — is not implemented,
-  nor is the top level that wires the interface, the master, the worker, and
-  `PixelIndexer` (`FPGA/PixelIndexer.sv`, a standalone raster-order coordinate
-  generator) into one datapath.
+- `RasterizerWorker` — the coverage test + alpha blend + streaming squared-error
+  accumulator that consumes `RasterizerMaster`'s output — exists in RTL but is
+  a work in progress (see its section: wrong module name, coverage gating and
+  testbench still missing). The top level that wires the interface, the master,
+  the worker, and `PixelIndexer` (`FPGA/PixelIndexer.sv`, a standalone raster-
+  order coordinate generator) into one datapath is not implemented.
 - No measured hardware-vs-CPU comparison exists. Any throughput claim is
   pending a cycle model or synthesis numbers.

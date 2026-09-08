@@ -6,7 +6,6 @@ module RasterizerWorker
 
     // From AXILite worker
     input logic pixel_valid,
-    input logic pixel_last,
 
     input color_t t_col,
     input color_t b_col,
@@ -25,10 +24,15 @@ module RasterizerWorker
   wire in_tri = (s_d0 >= 0 && s_d1 >= 0 && s_d2 >= 0) ||
                 (s_d0 <= 0 && s_d1 <= 0 && s_d2 <= 0);
 
+  // c_col.x = (t_col.x*(255-a) + tri_col.x*a) / 255, matching Color.rasterize.
+  // Numerator is always in [0, 65025], so an unsigned floor divide matches
+  // Python's `// 255` exactly (no sign handling, no trunc-vs-floor mismatch).
   color_t c_col;
-  assign c_col.r = t_col.r + sdiv255($signed({1'b0, tri_col.a}) * (tri_col.r - t_col.r));
-  assign c_col.g = t_col.g + sdiv255($signed({1'b0, tri_col.a}) * (tri_col.g - t_col.g));
-  assign c_col.b = t_col.b + sdiv255($signed({1'b0, tri_col.a}) * (tri_col.b - t_col.b));
+  wire [7:0] blend_a  = tri_col.a;
+  wire [7:0] blend_ia = 8'd255 - blend_a;
+  assign c_col.r = udiv255(t_col.r * blend_ia + tri_col.r * blend_a);
+  assign c_col.g = udiv255(t_col.g * blend_ia + tri_col.g * blend_a);
+  assign c_col.b = udiv255(t_col.b * blend_ia + tri_col.b * blend_a);
 
   wire signed [8:0]  diff_r = b_col.r - c_col.r;
   wire signed [8:0]  diff_g = b_col.g - c_col.g;
@@ -49,19 +53,13 @@ module RasterizerWorker
     else if (pixel_valid && in_tri)
       sse_acc <= sse_acc + px_sse;
 
-  // Exact trunc(x/255) for x in [-65025, 65025]
-  function automatic signed [16:0] sdiv255;
-      input signed [16:0] x;
-      reg             sign;
-      reg  [15:0]     mag;
-      reg  [31:0]     mag_mult;
-      reg  [8:0]      udiv;
+  // Exact floor(x/255) for x in [0, 65025] via the magic-number reciprocal.
+  function automatic [7:0] udiv255;
+      input [15:0] x;
+      reg  [31:0] mag_mult;
       begin
-          sign     = x[16];
-          mag      = sign ? (~x[15:0] + 16'd1) : x[15:0];
-          mag_mult = mag * 32'd32897;
-          udiv     = mag_mult[31:23];
-          sdiv255  = sign ? -$signed({8'd0, udiv}) : $signed({8'd0, udiv});
+          mag_mult = x * 32'd32897;   // magic number :>
+          udiv255  = mag_mult[31:23];
       end
   endfunction
 
@@ -72,9 +70,10 @@ module RasterizerWorker
   //
   // Then the following can be computer per channel to get the resutant sse
   //
-  //  c_col.r = t_col + alpha*(tri_col - t_col) / 255
+  //  c_col.r = (t_col.r*(255-alpha) + tri_col.r*alpha) / 255
   //
-  // Note: this computaion must be done with signed
+  // Note: the numerator is always >= 0, so plain unsigned floor division
+  // matches the reference model's `// 255`.
   //
   //  int d_r = b_col.r - c_col.r;   // = c_r - b_r
   //  int s_r = 2 * t_col.r - b_col.r - c_col.r; // = c_r + b_r
@@ -82,9 +81,8 @@ module RasterizerWorker
   //
   // The q / 255 can be combinatorically as well:
   // udiv_255(q) = (q * 32897) >> 23 // magic number :>
-  // q / 255 = ~udiv_255(abs(q)) + 1
   //
-  // q * 32897 has a 24 bit result.
+  // q * 32897 fits in 32 bits for q <= 65025.
   //
   //  This results in 7 multiplies per pixel. These are multiply reduced forms,
   //  see src/rasterizer.cpp and src/sse.cpp for the full algorythem
