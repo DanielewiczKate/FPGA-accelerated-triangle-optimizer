@@ -8,8 +8,38 @@ the testbench packs words the same way the RTL unpacks them:
     triangle_t { color_t color; vertex_t [2:0] verts } -> color is the MSBs
 """
 
+import re
+
+from cocotb.triggers import RisingEdge, Timer, ReadOnly
 from dataclasses import dataclass
 
+_TOKEN = re.compile(r'([^.\[\]]+)|\[(\d+)\]')
+
+def resolve(dut, path):
+    """Resolve a signal spec to a handle: 'idx[0]', 'sub.bus[2].valid', 'mem[1][3]'."""
+    obj = dut
+    for name, index in _TOKEN.findall(path):
+        obj = getattr(obj, name) if name else obj[int(index)]
+    return obj
+
+async def monitor(dut, clk, signals, out, gate=None):
+    """Append a tuple of `signals` values to `out` each rising edge.
+    If `gate` is given, only append on cycles where that signal is 1.
+    Signal specs may index arrays: "idx[0]", "sub.bus[2].valid"."""
+    handles = [resolve(dut, s) for s in signals]
+    gate_h = resolve(dut, gate) if gate is not None else None
+    while True:
+        await RisingEdge(clk)
+        await ReadOnly()                      # let this edge's NBA updates settle
+        if gate_h is None or gate_h.value == 1:
+            out.append(tuple(int(h.value) for h in handles))
+
+def mix64(x: int) -> int:
+    m = (1 << 64) - 1
+    x = (x + 0x9E3779B97F4A7C15) & m
+    x = ((x ^ (x >> 30)) * 0xBF58476D1CE4E5B9) & m
+    x = ((x ^ (x >> 27)) * 0x94D049BB133111EB) & m
+    return x ^ (x >> 31)
 
 @dataclass
 class Color:                       # color_t: r=[31:24] g=[23:16] b=[15:8] a=[7:0]

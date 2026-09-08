@@ -11,7 +11,7 @@ import random
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, Timer, ReadOnly
-from common import Color, Vertex, Triangle
+from common import Color, Vertex, Triangle, monitor, mix64
 from cocotbext.axi import AxiLiteBus, AxiLiteMaster, AxiStreamSource, AxiStreamBus
 
 from dataclasses import dataclass
@@ -75,21 +75,7 @@ class TB(object):
         await RisingEdge(self.dut.s_axi_aclk)
         await RisingEdge(self.dut.s_axi_aclk)
 
-def mix64(x: int) -> int:
-    m = (1 << 64) - 1
-    x = (x + 0x9E3779B97F4A7C15) & m
-    x = ((x ^ (x >> 30)) * 0xBF58476D1CE4E5B9) & m
-    x = ((x ^ (x >> 27)) * 0x94D049BB133111EB) & m
-    return x ^ (x >> 31)
 
-async def monitor(dut, clk, signals, out, gate=None):
-    """Append a tuple of `signals` values to `out` each rising edge.
-    If `gate` is given, only append on cycles where that signal is 1."""
-    while True:
-        await RisingEdge(clk)
-        await ReadOnly()                      # let this edge's NBA updates settle
-        if gate is None or getattr(dut, gate).value == 1:
-            out.append(tuple(int(getattr(dut, s).value) for s in signals))
 
 def cycle_pause():
     return itertools.cycle([1, 1, 1, 0])
