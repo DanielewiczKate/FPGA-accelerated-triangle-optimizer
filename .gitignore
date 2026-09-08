@@ -50,6 +50,8 @@ CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
 Makefile
+# ...but FPGA/Makefile is the hand-written cocotb harness, not CMake output
+!/FPGA/Makefile
 install_manifest.txt
 CMakeUserPresets.json
 compile_commands.json

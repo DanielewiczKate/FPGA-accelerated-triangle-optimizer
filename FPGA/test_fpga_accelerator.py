@@ -7,6 +7,7 @@ import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, Timer, ReadOnly
 from common import Color, Vertex, Triangle, monitor, mix64
+import common
 from cocotbext.axi import AxiLiteBus, AxiLiteMaster, AxiStreamSource, AxiStreamBus
 
 from dataclasses import dataclass
@@ -43,7 +44,7 @@ class TB(object):
         self.axil_master = AxiLiteMaster(
             AxiLiteBus.from_prefix(dut, "s_axi"),
             dut.s_axi_aclk, dut.s_axi_aresetn,
-            reset_active_level=False,
+reset_active_level=False,
         )
 
         self.axil_stream = AxiStreamSource(
@@ -78,7 +79,7 @@ class TB(object):
 async def initilize(dut):
     N = 5
     tri = Triangle(
-            Color(255, 255, 255, 255),
+            Color(1, 0, 0, 255),
             [Vertex(0, 0), Vertex(N-1, 0), Vertex(N-1, N-1)])
     max_coord = Vertex(N, N)
 
@@ -92,4 +93,37 @@ async def initilize(dut):
     # wait for it to prime. Render_ready is now set
     await RisingEdge(tb.dut.s_axi_aclk)
     await RisingEdge(tb.dut.s_axi_aclk)
+
+    # Once we start streaming we should get delta_see coming back. Setting up
+    # a monitor
+
+    beats = []
+    mon = cocotb.start_soon(
+        monitor(dut, dut.s_axi_aclk,
+        [
+            "delta_sse",
+            ],
+        beats, gate="pixel_valid")
+    )
+
+    await RisingEdge(tb.dut.s_axi_aclk)
+
+    # Open up streams, stream in dummy data. By setting both pixels to 0 and
+    # the tri col to (1,0,0,255) we can assert correctness by checking
+    # delta_sse = N*(N+1)/2
+    for i in range(N*N):
+        await tb.axil_stream.send(0x0.to_bytes(8, "little"))
+
+    for i in range(N*N):
+        await RisingEdge(tb.dut.s_axi_aclk)
+
+
+    beats = [
+        (common.as_signed(sse_acc, 64))
+        for (sse_acc, ) in beats
+    ]
+    dut._log.info(beats);
+
+    expected = N*(N+1)/2
+    assert beats[N * N] == expected
 
