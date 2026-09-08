@@ -209,9 +209,9 @@ so the AXI4-Lite handshake is exercised under channel pauses on every side.
 | `pixel_stream_data_backpressure` | same, toggling `render_ready` to confirm no beats are dropped under stream backpressure |
 | `partial_writes` | skipped — `WSTRB` sub-word writes are out of scope (the driver issues full 32-bit words) |
 
-## `RasterizerMaster` — edge-function front end
+## `RasterizerDispatch` — edge-function front end
 
-`FPGA/RasterizerMaster.sv` is the first stage of the compute datapath. It turns
+`FPGA/RasterizerDispatch.sv` is the first stage of the compute datapath. It turns
 the decoded `triangle` + `max_coord` from `AXILiteWorker` into the per-pixel
 quantities a downstream `RenderWorker` needs, walking the bounding box in raster
 order and emitting one set of edge-function values per pixel. It is the RTL port
@@ -254,7 +254,7 @@ today; the per-lane loops are pass-throughs and lane routing is not implemented.
 
 ### Verification
 
-cocotb, `FPGA/test_render_master.py`, `make render_master` (add `SIM=verilator`
+cocotb, `FPGA/test_render_dispatch.py`, `make render_dispatch` (add `SIM=verilator`
 as elsewhere).
 
 Golden reference is `tests/data/render_dump.txt`: a list of `(idx, d0, d1, d2)`
@@ -272,13 +272,13 @@ model.
 
 ## `RasterizerWorker` — coverage test + blend + squared-error accumulate
 
-`FPGA/RasterizerWorker.sv` is the compute stage downstream of `RasterizerMaster`.
+`FPGA/RasterizerWorker.sv` is the compute stage downstream of `RasterizerDispatch`.
 It consumes the per-pixel edge functions and colour triple and folds each
 covered pixel into a running `delta_SSE`. This is the block the sections above
 call `RenderWorker`.
 
 **Inputs**: the `pixel_valid` strobe, the three edge functions
-`s_d0` / `s_d1` / `s_d2` (`s33_t`) and `idx` from `RasterizerMaster`, and the
+`s_d0` / `s_d1` / `s_d2` (`s33_t`) and `idx` from `RasterizerDispatch`, and the
 `t_col` / `b_col` / `tri_col` colour triple for that pixel. **Output**:
 `sse_acc[63:0]` — the accumulated signed squared-error delta.
 
@@ -312,13 +312,13 @@ Not yet covered: the `in_tri` coverage gate (both tests leave `s_d0` / `s_d1` /
 
 ## Status
 
-- `AXILiteWorker` (bus / control interface) and `RasterizerMaster` (edge-
+- `AXILiteWorker` (bus / control interface) and `RasterizerDispatch` (edge-
   function front end) exist, each with a cocotb testbench.
 - `RasterizerWorker` — the coverage test + alpha blend + streaming squared-error
-  accumulator that consumes `RasterizerMaster`'s output — exists in RTL with a
+  accumulator that consumes `RasterizerDispatch`'s output — exists in RTL with a
   cocotb testbench (`per_pixel_sse` and `accumulator`, both against the Python
   `Color` model; the `in_tri` coverage gate is not yet exercised). The top level
-  that wires the interface, the master, the worker, and `PixelIndexer`
+  that wires the interface, the dispatch, the worker, and `PixelIndexer`
   (`FPGA/PixelIndexer.sv`, a standalone raster-order coordinate generator) into
   one datapath is not implemented.
 - No measured hardware-vs-CPU comparison exists. Any throughput claim is

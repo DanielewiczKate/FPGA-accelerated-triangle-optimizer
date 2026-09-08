@@ -145,7 +145,5 @@ async def accumulator(dut):
         (common.as_signed(sse_acc, 64))
         for (sse_acc, ) in beats
     ]
-    dut._log.info(beats);
-    dut._log.info(delta_sse_acc);
 
     assert delta_sse_acc[NUM_TRIALS-1] == beats[NUM_TRIALS-1]
