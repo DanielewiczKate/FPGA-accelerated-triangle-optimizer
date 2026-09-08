@@ -1,4 +1,4 @@
-module RasterizerMaster
+module RasterizerDispatch
   import common::*;
   #(
     parameter integer NUM_LANES = 1
@@ -161,9 +161,9 @@ module RasterizerMaster
 
 
 
-  // This rasterizer master is based on RasterizeTriangleV2
+  // This rasterizer dispatch is based on RasterizeTriangleV2
   //
-  // RasterizerMaster can control many different rasterizers, RasterizerMaster
+  // RasterizerDispatch can control many different rasterizers, RasterizerDispatch
   // is what organizes the various rasterizers. This includes giving each
   // their color data, and their edge function values. This was chosen to allow
   // for future multi lane functionality. At the moment, I am not implementing

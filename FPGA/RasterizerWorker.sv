@@ -63,7 +63,7 @@ module RasterizerWorker
       end
   endfunction
 
-  // From RasterizerMaster
+  // From RasterizerDispatch
   // The only pixels we have to consider are the pixels which satisfy:
   //
   // ((d0 >= 0 && d1 >= 0 && d2 >= 0) || (d0 <= 0 && d1 <= 0 && d2 <= 0))
