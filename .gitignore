@@ -75,3 +75,6 @@ Testing/
 .cache/
 /tests/triopt_tests
 /tests/test_cpy.png
+
+# cocotb per-run JUnit results (regenerated every `make`)
+FPGA/results*.xml
