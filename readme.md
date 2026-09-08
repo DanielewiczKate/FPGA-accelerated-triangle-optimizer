@@ -209,9 +209,78 @@ so the AXI4-Lite handshake is exercised under channel pauses on every side.
 | `pixel_stream_data_backpressure` | same, toggling `render_ready` to confirm no beats are dropped under stream backpressure |
 | `partial_writes` | skipped — `WSTRB` sub-word writes are out of scope (the driver issues full 32-bit words) |
 
+## `RasterizerMaster` — edge-function front end
+
+`FPGA/RasterizerMaster.sv` is the first stage of the compute datapath. It turns
+the decoded `triangle` + `max_coord` from `AXILiteWorker` into the per-pixel
+quantities a downstream `RenderWorker` needs, walking the bounding box in raster
+order and emitting one set of edge-function values per pixel. It is the RTL port
+of `RasterizeTriangleV2`'s incremental edge-function scheme (`src/rasterizer.cpp`).
+
+**Inputs**: `triangle`, `max_coord` (bbox max, `(0,0)` min assumed), the
+`pixel_valid` / `pixel_last` stream strobes, and the streamed `t_col` / `b_col`
+pixel pair (per lane). **Outputs**, per lane: `s_d0` / `s_d1` / `s_d2` — the
+three edge functions, `s33_t` = signed 33-bit — and `idx`, the linear pixel
+index, plus `t_col_out` / `b_col_out` / `tri_col_out` forwarded straight
+through. `render_ready` is the backpressure strobe back toward the stream sink.
+
+### Two-phase operation
+
+- **Precompute, once per triangle.** From the three vertices, register the
+  per-edge step constants — `A0..A2` (vertex-pair `Δy`) and `B0..B2`
+  (vertex-pair `−Δx`) — and the edge-function value at the bbox origin,
+  `d0_row..d2_row`. Those origin values are the *only* multiplies in the block
+  (six, and since this runs once per image they can be folded onto a single
+  time-shared multiplier — the `TODO` in the source).
+- **Per-pixel, incremental.** Each consumed pixel adds `A*` to the running edge
+  value (`s_d*`) and bumps `idx`. End of row is detected a cycle ahead by
+  `x + 1 >= max_coord.x`; on that boundary `x` wraps to 0 and the row
+  accumulators step by `B*` instead. One add per edge per pixel, no multiplies.
+  `y` is not tracked here — the stream master owns `max_coord.y` and end of
+  packet.
+
+`advance = pixel_valid && render_ready` gates every update, so the walk only
+moves on cycles where a pixel is actually consumed.
+
+The coverage test (`d0`, `d1`, `d2` all the same sign), the alpha blend, and the
+squared-error accumulate live in the block comment as the spec for the
+downstream `RenderWorker`; none of that is in this module.
+
+### Multi-lane
+
+`NUM_LANES` is a parameter for a future mode that processes several bbox rows in
+parallel by giving each lane its own `d*` / `idx` offset. It is `1` everywhere
+today; the per-lane loops are pass-throughs and lane routing is not implemented.
+
+### Verification
+
+cocotb, `FPGA/test_render_master.py`, `make render_master` (add `SIM=verilator`
+as elsewhere).
+
+Golden reference is `tests/data/render_dump.txt`: a list of `(idx, d0, d1, d2)`
+tuples dumped by the C++ `RasterizeTriangleV2` when built with `-DTRIOPT_DUMP=ON`
+(`dump.sh`, via the `Dump Triangles` ctest case). A `monitor` coroutine samples
+`idx` / `s_d0` / `s_d1` / `s_d2` on every `pixel_valid` cycle and the captured
+beats are compared against the dump, so the RTL edge-function walk is
+differentially tested against the same V2 rasterizer that is the C++ golden
+model.
+
+| test | checks |
+| --- | --- |
+| `single_row_test` | one 5×5 triangle, first bbox row only; assert the first 4 beats match the dump |
+| `multi_row_test` | same triangle, full 5×5 bbox; assert every captured beat matches the dump, in order |
+
 ## Status
 
-The interface block and its testbench exist; the compute datapath (edge-
-function rasteriser + streaming `delta_SSE` accumulator) is not yet
-implemented, and there is no measured hardware-vs-CPU comparison. Any
-throughput claim here is pending a cycle model or real synthesis numbers.
+- `AXILiteWorker` (bus / control interface) and `RasterizerMaster` (edge-
+  function front end) exist, each with a cocotb testbench.
+- `RenderWorker` — the coverage test + alpha blend + streaming squared-error
+  accumulator that consumes `RasterizerMaster`'s output — is not implemented,
+  nor is the top level that wires the interface, the master, the worker, and
+  `PixelIndexer` (`FPGA/PixelIndexer.sv`, a standalone raster-order coordinate
+  generator) into one datapath.
+- `RasterizerMaster.render_ready` is currently tied high after reset
+  (`TODO: remove testing only`); real precompute-done gating and the
+  `pixel_last` path are not wired.
+- No measured hardware-vs-CPU comparison exists. Any throughput claim is
+  pending a cycle model or synthesis numbers.
