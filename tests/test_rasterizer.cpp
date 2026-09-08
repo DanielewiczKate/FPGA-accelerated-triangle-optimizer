@@ -158,7 +158,7 @@ TEST_CASE("RasterizeTriangleV2: V2 matches V1") {
 }
 
 TEST_CASE("Dump Triangles") {
-    const int N = 32;
+    const int N = 5;
     ImageData image(N, N);
     Triangle tri;
 

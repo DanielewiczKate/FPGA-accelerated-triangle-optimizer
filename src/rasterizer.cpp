@@ -85,8 +85,8 @@ void RasterizeTriangleV2(ImageData& image, const Triangle& triangle) {
         size_t row_i = (size_t)y * x_size;
 
         for (pcrd_t x = tri_bounds.x_min; x <= tri_bounds.x_max; x++) {
+            size_t i = row_i + x;
             if ((d0 >= 0 && d1 >= 0 && d2 >= 0) || (d0 <= 0 && d1 <= 0 && d2 <= 0)) {
-                size_t i = row_i + x;
                 Color new_col;
                 uint16_t alpha = col.a;
                 new_col.r = (data[i].r * (255 - alpha) + col.r * alpha) / 255;
@@ -95,11 +95,12 @@ void RasterizeTriangleV2(ImageData& image, const Triangle& triangle) {
                 new_col.a = data[i].a;
                 data[i] = new_col;
 
+            }
+
 #ifdef DUMP
                 dump_output += std::format("({}, {}, {}, {}),",
                         i, d0, d1, d2);
 #endif
-            }
             d0 += A0; d1 += A1; d2 += A2;
         }
         d0_row += B0; d1_row += B1; d2_row += B2;
