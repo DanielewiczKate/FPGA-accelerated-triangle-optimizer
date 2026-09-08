@@ -90,13 +90,30 @@ module RasterizerMaster
   s33_t s_d2_next [NUM_LANES];
   logic [15:0] idx_next [NUM_LANES];
 
+  // Need to know the location in the row to do wrapping
+  logic [16:0] x_next;
+  logic [16:0] x;
+
   always_comb
   begin
-    if(0) // TODO: X overflow condition. Currently working on per row impl
+    if(x + 1 >= max_coord.x) // next e
     begin
-
+      x_next = 0;
+      d0_row_next = d0_row + B0;
+      d1_row_next = d1_row + B1;
+      d2_row_next = d2_row + B2;
+      for (int i = 0; i < NUM_LANES; i++) begin
+        idx_next[i] = idx[i] + 1;
+        s_d0_next[i] = d0_row + B0;
+        s_d1_next[i] = d1_row + B1;
+        s_d2_next[i] = d2_row + B2;
+      end
     end
     else begin // Standard line.
+      x_next = x + 1;
+      d0_row_next = d0_row;
+      d1_row_next = d1_row;
+      d2_row_next = d2_row;
       for (int i = 0; i < NUM_LANES; i++) begin
         idx_next[i] = idx[i] + 1;
         s_d0_next[i] = s_d0[i] + A0;
@@ -112,8 +129,9 @@ module RasterizerMaster
   if(!rst)
   begin
     render_ready <= 0;
+    x <= 0;
     for (int i = 0; i < NUM_LANES; i++) begin
-
+      // TODO: find a better way to initialzie this
       s_d0[i] <= -(v0.x * A0 + v0.y * B0);
       s_d1[i] <= -(v1.x * A1 + v1.y * B1);
       s_d2[i] <= -(v2.x * A2 + v2.y * B2);
@@ -124,6 +142,10 @@ module RasterizerMaster
     render_ready <= 1; // TODO: remove testing only
     if(advance)
     begin
+      x <= x_next;
+      d0_row <= d0_row_next;
+      d1_row <= d1_row_next;
+      d2_row <= d2_row_next;
       for (int i = 0; i < NUM_LANES; i++) begin
         s_d0[i] <= s_d0_next[i];
         s_d1[i] <= s_d1_next[i];
