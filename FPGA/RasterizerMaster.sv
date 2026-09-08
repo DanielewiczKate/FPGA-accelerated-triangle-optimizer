@@ -29,7 +29,7 @@ module RasterizerMaster
     output var s33_t s_d0 [NUM_LANES],
     output var s33_t s_d1 [NUM_LANES],
     output var s33_t s_d2 [NUM_LANES],
-    output var logic [15:0] idx [NUM_LANES]
+    output var logic [31:0] idx [NUM_LANES]
   );
   vertex_t v0, v1, v2;
 
@@ -40,6 +40,7 @@ module RasterizerMaster
       tri_col_out[i] = triangle.color;
     end
   end
+
 
   assign v0 = triangle.verts[0];
   assign v1 = triangle.verts[1];
@@ -88,7 +89,7 @@ module RasterizerMaster
   s33_t s_d0_next [NUM_LANES];
   s33_t s_d1_next [NUM_LANES];
   s33_t s_d2_next [NUM_LANES];
-  logic [15:0] idx_next [NUM_LANES];
+  logic [31:0] idx_next [NUM_LANES];
 
   // Need to know the location in the row to do wrapping
   logic [16:0] x_next;
