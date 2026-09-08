@@ -294,19 +294,21 @@ call `RenderWorker`.
   `Δ(squared error) = (c - b)(c + b - 2t)` form — three multiplies per pixel
   instead of six.
 
-### Not done yet
-
-- `idx` is a port but is never read.
-- `FPGA/test_render_worker.py` checks one pixel only: the combinational `px_sse`
-  wire against the Python `Color.delta_SSE` reference for a single colour triple.
-  Nothing exercises the `sse_acc` accumulator, its reset value, the `in_tri`
-  coverage gate, or a multi-pixel stream, and there is no differential run
-  against the C++ `compute_delta_SSE`.
-
 ### Verification
 
 cocotb, `FPGA/test_render_worker.py`, `make render_worker` (add `SIM=verilator`
-as elsewhere).
+as elsewhere). The reference is the Python `Color` model in `FPGA/common.py`
+(`Color.rasterize` for the blend, `Color.delta_SSE` for the per-pixel error), not
+a direct run against the C++ `compute_delta_SSE`.
+
+| test | checks |
+| --- | --- |
+| `per_pixel_sse` | 50 random `t_col` / `b_col` / `tri_col` triples (seed `0xC0FFEE`); one clock after driving each, assert the combinational `px_sse` wire equals `Color.delta_SSE(t_col, b_col, Color.rasterize(t_col, tri_col))` |
+| `accumulator` | streams the same 50 triples, one per cycle, with `pixel_valid` held high; a `monitor` coroutine samples `sse_acc` on every `pixel_valid` edge, and the last sample must equal the running sum of the per-pixel deltas |
+
+Not yet covered: the `in_tri` coverage gate (both tests leave `s_d0` / `s_d1` /
+`s_d2` at 0, so `in_tri` is always true and every pixel accumulates), the
+`sse_acc` reset value, and the `idx` port.
 
 ## Status
 
@@ -314,9 +316,10 @@ as elsewhere).
   function front end) exist, each with a cocotb testbench.
 - `RasterizerWorker` — the coverage test + alpha blend + streaming squared-error
   accumulator that consumes `RasterizerMaster`'s output — exists in RTL with a
-  single-pixel cocotb test (see its section for what that test does not yet
-  cover). The top level that wires the interface, the master, the worker, and
-  `PixelIndexer` (`FPGA/PixelIndexer.sv`, a standalone raster-order coordinate
-  generator) into one datapath is not implemented.
+  cocotb testbench (`per_pixel_sse` and `accumulator`, both against the Python
+  `Color` model; the `in_tri` coverage gate is not yet exercised). The top level
+  that wires the interface, the master, the worker, and `PixelIndexer`
+  (`FPGA/PixelIndexer.sv`, a standalone raster-order coordinate generator) into
+  one datapath is not implemented.
 - No measured hardware-vs-CPU comparison exists. Any throughput claim is
   pending a cycle model or synthesis numbers.
