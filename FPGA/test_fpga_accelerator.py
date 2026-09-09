@@ -86,14 +86,14 @@ async def initilize(dut):
 
     tb = TB(dut)
 
-    # TODO There is something wrong with the axil to the dispatcher, this is a temp
-    # solution so that I can fix the other problems
-    dut.rasterizer.rasterizer_dispatch.triangle.value = Force(tri.to_int())
-    dut.rasterizer.rasterizer_dispatch.max_coord.value = Force(max_coord.to_word())
 
     await tb.cycle_reset()
+    await tb.init_accelerator(max_coord, tri)
+    await RisingEdge(tb.dut.s_axi_aclk)
 
-
+    dut.rasterizer.rasterizer_dispatch.rst.value = 0;
+    await RisingEdge(tb.dut.s_axi_aclk)
+    dut.rasterizer.rasterizer_dispatch.rst.value = 1;
     await RisingEdge(tb.dut.s_axi_aclk)
 
     # TODO Reset render to get it ready. This does not work
