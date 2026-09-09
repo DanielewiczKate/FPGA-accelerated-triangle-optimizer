@@ -5,6 +5,10 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# triopt_core is a static lib that gets linked into the shared Python bridge
+# (bindings/triopt_c.cpp), so every first-party object needs to be PIC.
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 # clang-tidy / clangd read this.
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -51,5 +55,14 @@ add_executable(triopt
 )
 target_link_libraries(triopt PRIVATE triopt_core)
 target_compile_options(triopt PRIVATE ${TRIOPT_WARNINGS})
+
+# Python (ctypes) bridge. A thin extern "C" shim over triopt_core so the cocotb
+# / pytest reference models can call the real C++ (golden rasterizer and
+# delta-SSE) instead of a Python re-implementation. Builds to
+# build/libtriopt_c.so; FPGA/triopt_ref.py loads it from there.
+#     cmake --build build --target triopt_c
+add_library(triopt_c SHARED bindings/triopt_c.cpp)
+target_link_libraries(triopt_c PRIVATE triopt_core)
+target_compile_options(triopt_c PRIVATE ${TRIOPT_WARNINGS})
 
 add_subdirectory(tests)
