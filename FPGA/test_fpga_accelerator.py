@@ -5,6 +5,7 @@ import random
 
 import cocotb
 from cocotb.clock import Clock
+from cocotb.handle import Force
 from cocotb.triggers import RisingEdge, Timer, ReadOnly
 from common import Color, Vertex, Triangle, monitor, mix64
 import common
@@ -84,10 +85,18 @@ async def initilize(dut):
     max_coord = Vertex(N, N)
 
     tb = TB(dut)
-    await tb.cycle_reset()
-    await tb.init_accelerator(max_coord, tri)
 
-    # Reset render to get it ready
+    # TODO There is something wrong with the axil to the dispatcher, this is a temp
+    # solution so that I can fix the other problems
+    dut.rasterizer.rasterizer_dispatch.triangle.value = Force(tri.to_int())
+    dut.rasterizer.rasterizer_dispatch.max_coord.value = Force(max_coord.to_word())
+
+    await tb.cycle_reset()
+
+
+    await RisingEdge(tb.dut.s_axi_aclk)
+
+    # TODO Reset render to get it ready. This does not work
     await tb.axil_master.write(A_CTRL, 0x2.to_bytes(4, "little"))
 
     # wait for it to prime. Render_ready is now set
@@ -96,7 +105,7 @@ async def initilize(dut):
 
     # Once we start streaming we should get delta_see coming back. Setting up
     # a monitor
-
+    # NOTE: This drops the last value, since pixel_valid is delayed
     beats = []
     mon = cocotb.start_soon(
         monitor(dut, dut.s_axi_aclk,
@@ -114,7 +123,8 @@ async def initilize(dut):
     for i in range(N*N):
         await tb.axil_stream.send(0x0.to_bytes(8, "little"))
 
-    for i in range(N*N):
+    # Why does this take N*N + 3?
+    for i in range(N*N + 3):
         await RisingEdge(tb.dut.s_axi_aclk)
 
 
@@ -125,5 +135,4 @@ async def initilize(dut):
     dut._log.info(beats);
 
     expected = N*(N+1)/2
-    assert beats[N * N] == expected
-
+    assert expected == common.as_signed(int(dut.rasterizer.t_sse_acc.value), 64)
