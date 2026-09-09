@@ -30,9 +30,9 @@ module RasterizerWorker
   color_t c_col;
   wire [7:0] blend_a  = tri_col.a;
   wire [7:0] blend_ia = 8'd255 - blend_a;
-  assign c_col.r = udiv255(t_col.r * blend_ia + tri_col.r * blend_a);
-  assign c_col.g = udiv255(t_col.g * blend_ia + tri_col.g * blend_a);
-  assign c_col.b = udiv255(t_col.b * blend_ia + tri_col.b * blend_a);
+  assign c_col.r = udiv255(b_col.r * blend_ia + tri_col.r * blend_a);
+  assign c_col.g = udiv255(b_col.g * blend_ia + tri_col.g * blend_a);
+  assign c_col.b = udiv255(b_col.b * blend_ia + tri_col.b * blend_a);
 
   wire signed [8:0]  diff_r = b_col.r - c_col.r;
   wire signed [8:0]  diff_g = b_col.g - c_col.g;
