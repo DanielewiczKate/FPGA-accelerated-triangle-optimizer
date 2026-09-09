@@ -1,10 +1,3 @@
-// =============================================================================
-// AI-GENERATED (Claude Code) — C-ABI bridge boilerplate, not algorithm code.
-// This file only marshals flat buffers and scalars across the C ABI; every
-// rasterizer / SSE implementation it forwards to is hand-written in src/.
-// Reviewed before commit; review again before relying on it.
-// =============================================================================
-//
 // extern "C" shim over triopt_core for the Python (ctypes) bridge.
 //
 // This file contains no algorithm -- it only marshals flat RGBA8 buffers and

@@ -1,9 +1,3 @@
-# =============================================================================
-# AI-GENERATED (Claude Code) — ctypes bridge boilerplate, not algorithm code.
-# Loads and wraps the hand-written C++ in src/; contains no rasterizer / SSE
-# logic itself. Reviewed before commit; review again before relying on it.
-# =============================================================================
-
 """ctypes bridge to the C++ reference implementation in src/.
 
 Loads ``libtriopt_c`` (the ``extern "C"`` shim in ``bindings/triopt_c.cpp``)
