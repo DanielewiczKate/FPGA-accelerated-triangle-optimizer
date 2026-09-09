@@ -9,6 +9,45 @@ datapath. The search (RNG, proposal generation, accept/reject, canvas commits)
 stays on the host. The RTL is verified in Python with cocotb, differentially
 against the same C++ functions the software path uses as its golden model.
 
+## What's in this repo
+
+**RTL — `FPGA/`, SystemVerilog, ~930 lines across 7 files:**
+
+- `AXILiteWorker` — **AXI4-Lite** control plane (started from an open-source
+  register-slave skeleton; register map, reset behaviour, and write-1-pulse
+  semantics reworked, trimmed to the eight registers this design needs) plus an
+  **AXI4-Stream** 64-bit pixel sink written from scratch to the ARM AMBA
+  AXI-Stream spec.
+- `RasterizerDispatch` → `RasterizerWorker` → `Rasterizer` — the scoring
+  datapath: **2 registered stages, initiation interval 1, stalls only on
+  backpressure**. Incremental edge functions (one add per edge per pixel, no
+  per-pixel multiplies), integer alpha blend with a reciprocal-multiply for
+  `/255`, signed 33-bit edge functions, 64-bit signed squared-error accumulator.
+- Five datapath modules total 866 lines; plus `common.sv` (packed types) and the
+  standalone `PixelIndexer`.
+
+**Verification — `FPGA/`, cocotb:** 20 test functions (19 implemented; 1 skipped
+— `WSTRB` sub-word writes, out of scope) across five testbenches. Bus traffic
+comes from `cocotbext-axi`; the interface tests are replayed four ways under
+idle/backpressure stalls. Every block is checked against a reference model, and
+the full interface→dispatch→worker path is **differentially tested
+against the real C++ scoring functions through a `ctypes` bridge**, bit-exact on
+`delta_SSE`.
+
+**Software baseline — `src/`, C++:** a naive rasterizer and SSE kept permanently
+as the golden reference, plus two measured single-variable optimizations, each an
+A/B on one commit with a committed benchmark CSV:
+
+- incremental delta-SSE scoring vs. full rescan — **1.66x** at 100 000 proposals
+- incremental edge-function rasterizer (the scheme the RTL ports) vs. fresh
+  cross-product per pixel — **1.35x** at 8 000 proposals
+
+**Scope:** simulation only (Icarus / Verilator). The datapath computes the
+correct number in simulation; it has **never been synthesized** — no fmax, no
+utilization, no power, no on-hardware-vs-CPU comparison — and the completion
+handshake around the datapath is unfinished. See [Status](#status) and
+[Known gaps](#known-gaps--loose-ends).
+
 ```mermaid
 flowchart LR
     CPU["Host / PS<br/>hill-climb search"]
@@ -32,7 +71,7 @@ flowchart LR
 
 | property | value |
 | --- | --- |
-| pipeline depth | **2 registered stages**, beat -> result: stream-ingress capture in `AXILiteWorker`, then the squared-error accumulator in `RasterizerWorker` |
+| pipeline depth | 2 registered stages, beat -> result: stream-ingress capture in `AXILiteWorker`, then the squared-error accumulator in `RasterizerWorker` |
 | between the stages | fully combinational: edge-function step, coverage test (`s_d0/1/2` same sign), integer alpha blend (`(b*(255-a)+tri*a)/255` via an `(x*32897)>>23` reciprocal), the `(t-c)² - (t-b)²` reduction, and the lane sum |
 | edge-function front end | not a feed-forward stage — `RasterizerDispatch` holds the running edge values in registers and steps them one add per edge per pixel, aligned to the incoming beat, **no per-pixel multiplies** |
 | throughput | 1 pixel / cycle / lane, initiation interval 1, stalls only on `render_ready` backpressure |
@@ -69,7 +108,11 @@ the scalar `delta_SSE`. Everything else stays in software.
 
 `FPGA/AXILiteWorker.sv` is the boundary block between the bus and the compute
 datapath. It has two independent AXI interfaces plus a plain handshake to the
-datapath:
+datapath. The AXI4-Lite side started from an open-source register-slave skeleton
+(the address/response handshake boilerplate); the register map, reset semantics,
+and the `W1P` pulse behaviour are reworked for this design and the file is
+stripped to the registers it needs. The AXI4-Stream sink is written from scratch
+against the ARM AMBA AXI-Stream spec.
 
 - **AXI4-Lite worker** (32-bit) — the control plane. A CPU writes the candidate
   triangle and bounding box, kicks a render, and reads the 64-bit result back.
@@ -312,6 +355,17 @@ bridge.
 | `CPP_bindings` | same corner triangle, drive it through the C++ bridge and the RTL, assert equal `delta_SSE` |
 | `CPP_bindings_random_colors` | corner triangle, **random** target / prev-best images and triangle colour (seeded); 10 trials, each diffed against `compute_delta_SSE` |
 | `CPP_bindings_random_triangle` | as above but a random triangle shape; `max_coord` derived from `tri.bounds()`, pixels streamed in the dispatch's `max_coord.x`-wide raster order |
+
+### `PixelIndexer` — `test_pixel_indexer.py` (`make pixel_indexer`)
+
+Standalone raster-order coordinate generator, not wired into the datapath (see
+[`RasterizerDispatch`](#rasterizerdispatch--edge-function-front-end) — the
+dispatch generates its own coordinates inline). Driven directly, no bus model.
+
+| test | checks |
+| --- | --- |
+| `counting` | 5×5 bbox, `pixel_valid` held, no backpressure; assert `coord` steps through every `(x, y)` in raster order for the full walk |
+| `counting_with_backpressure` | same walk, dropping `pixel_valid` mid-row and mid-frame; assert `coord` does not advance on the paused cycles and resumes on the same coordinate |
 
 ---
 
