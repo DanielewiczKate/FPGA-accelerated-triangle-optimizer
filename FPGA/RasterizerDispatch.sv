@@ -58,16 +58,17 @@ module RasterizerDispatch
   s33_t d1_row;
   s33_t d2_row;
 
+  assign A0 = v1.y - v0.y;
+  assign A1 = v2.y - v1.y;
+  assign A2 = v0.y - v2.y;
+
+  assign B0 = v0.x - v1.x;
+  assign B1 = v1.x - v2.x;
+  assign B2 = v2.x - v0.x;
+
   always_ff @(posedge clk)
   if (!rst)
   begin
-    A0 <= v1.y - v0.y;
-    A1 <= v2.y - v1.y;
-    A2 <= v0.y - v2.y;
-
-    B0 <= v0.x - v1.x;
-    B1 <= v1.x - v2.x;
-    B2 <= v2.x - v0.x;
 
     // TODO change this to a multiplexer, since this takes 6 multipliers. This
     // is done once per image, so no need to do it in a single frame

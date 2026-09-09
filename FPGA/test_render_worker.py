@@ -69,7 +69,7 @@ async def per_pixel_sse(dut):
         dut.b_col.value = b_col.to_word()
         dut.tri_col.value = tri_col.to_word()
 
-        c_col = Color.rasterize(t_col, tri_col)
+        c_col = Color.rasterize(b_col, tri_col)
 
         # allow to settle
         await RisingEdge(dut.clk)
@@ -131,7 +131,7 @@ async def accumulator(dut):
         dut.b_col.value = b_col.to_word()
         dut.tri_col.value = tri_col.to_word()
 
-        c_col = Color.rasterize(t_col, tri_col)
+        c_col = Color.rasterize(b_col, tri_col)
 
         running_total += Color.delta_SSE(t_col, b_col, c_col)
         delta_sse_acc.append(running_total)

@@ -42,6 +42,7 @@ module AXILiteWorker
     // delta_sse is only defined when the done bit of the status register is
     // high, otherwise it is undefined behaviour
     output  wire          start,     // 1-cycle pulse when CTRL bit0 is written 1
+    output  wire          rst_render,// 1-cycle pulse when CTRL bit1 is written 1
     input   wire          busy,      // datapath mid-render (reads back in STATUS)
     input   wire          done,      // datapath finished  (reads back in STATUS)
     input   wire  [63:0]  delta_sse,  // result; readable at SSE_LO / SSE_HI.
@@ -77,7 +78,7 @@ module AXILiteWorker
 
   // Register map. Word index = s_axi_a{W,R}ADDR[C_AXI_ADDR_WIDTH-1:ADDRLSB].
   localparam [3:0]
-    A_CTRL    = 4'h0,  // RW  bit0 = start (self-clearing)
+    A_CTRL    = 4'h0,  // RW  bit0 = start, bit1 = rst_render (both self clearing)
     A_STATUS  = 4'h1,  // RO  bit0 = busy, bit1 = done
     A_MAXC    = 4'h2,  // RW  bounding box, x=[15:0] y=[31:16]
     A_TRI_V0  = 4'h3,  // RW
@@ -236,7 +237,7 @@ module AXILiteWorker
   begin
     case (waddr)
       A_CTRL   : ctrl       <= apply_wstrb(ctrl,       s_axi_wdata, s_axi_wstrb)
-                                 & {{(C_AXI_DATA_WIDTH-1){1'b1}}, 1'b0};
+                                 & {{(C_AXI_DATA_WIDTH-1){1'b1}}, 2'b00};
       A_MAXC   : max_coords <= apply_wstrb(max_coords, s_axi_wdata, s_axi_wstrb);
       A_TRI_V0 : c_tri_v0   <= apply_wstrb(c_tri_v0,   s_axi_wdata, s_axi_wstrb);
       A_TRI_V1 : c_tri_v1   <= apply_wstrb(c_tri_v1,   s_axi_wdata, s_axi_wstrb);
@@ -250,6 +251,9 @@ module AXILiteWorker
   assign start = axil_awready && (waddr == A_CTRL)
                  && s_axi_wstrb[0] && s_axi_wdata[0];
 
+  // rst_render: 1-cycle pulse when CTRL bit1 is written with its byte strobe set.
+  assign rst_render = axil_awready && (waddr == A_CTRL)
+                 && s_axi_wstrb[0] && s_axi_wdata[1];
   // --- Read mux ----------------------------------------------------------
   // Capture only on an accepted read (axil_read_ready) so raddr is valid and
   // we are not latching off an idle bus. Held until the master takes it.

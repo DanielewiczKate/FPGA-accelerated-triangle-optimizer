@@ -67,6 +67,14 @@ class Color:                       # color_t: r=[31:24] g=[23:16] b=[15:8] a=[7:
     def from_word(cls, w: int) -> "Color":
         return cls((w >> 24) & 0xFF, (w >> 16) & 0xFF, (w >> 8) & 0xFF, w & 0xFF)
 
+    def to_rgba(self) -> bytes:
+        """Byte order of `struct Color` in src/common.hpp: r, g, b, a."""
+        return bytes((self.r & 0xFF, self.g & 0xFF, self.b & 0xFF, self.a & 0xFF))
+
+    @classmethod
+    def from_rgba(cls, b) -> "Color":
+        return cls(b[0], b[1], b[2], b[3])
+
     @staticmethod
     def delta_SSE(target, best, candidate) -> int:
         b_r = target.r - best.r
@@ -128,3 +136,76 @@ class Triangle:                    # triangle_t: {color, verts[2:0]}, color is M
             Color.from_word((v >> 96) & 0xFFFFFFFF),
             [Vertex.from_word((v >> s) & 0xFFFFFFFF) for s in (0, 32, 64)],
         )
+
+    def bounds(self) -> "PixelBounds":
+        """Mirror of Triangle::bounds() in src/common.hpp."""
+        xs = [v.x for v in self.verts]
+        ys = [v.y for v in self.verts]
+        return PixelBounds(min(xs), max(xs), min(ys), max(ys))
+
+
+@dataclass
+class PixelBounds:                 # mirror of PixelBounds in src/common.hpp
+    x_min: int = 0
+    x_max: int = 0
+    y_min: int = 0
+    y_max: int = 0
+
+
+class ImageData:
+    """Mirror of ImageData in src/common.hpp.
+
+    Row-major RGBA8. Pixel [x, y] lives at byte (x + y * x_size) * 4, channel
+    order r, g, b, a -- byte-for-byte the same layout as the C++ `Color*
+    data()`, so `buf` can be handed straight to the ctypes bridge and mutated
+    in place. Size is fixed at construction, matching the C++ invariant.
+    """
+
+    BYTES_PER_PIXEL = 4
+
+    def __init__(self, x_size: int, y_size: int, fill: "Color | None" = None):
+        self.x_size = int(x_size)
+        self.y_size = int(y_size)
+        px = (fill or Color(0, 0, 0, 255)).to_rgba()
+        self.buf = bytearray(px * (self.x_size * self.y_size))
+
+    @property
+    def size(self) -> int:
+        return self.x_size * self.y_size
+
+    def _offset(self, x: int, y: int) -> int:
+        if not (0 <= x < self.x_size and 0 <= y < self.y_size):
+            raise IndexError(f"pixel ({x}, {y}) outside {self.x_size}x{self.y_size}")
+        return (x + y * self.x_size) * self.BYTES_PER_PIXEL
+
+    def __getitem__(self, xy) -> "Color":
+        o = self._offset(*xy)
+        return Color.from_rgba(self.buf[o:o + self.BYTES_PER_PIXEL])
+
+    def __setitem__(self, xy, col: "Color") -> None:
+        o = self._offset(*xy)
+        self.buf[o:o + self.BYTES_PER_PIXEL] = col.to_rgba()
+
+    def copy(self) -> "ImageData":
+        img = ImageData(self.x_size, self.y_size)
+        img.buf[:] = self.buf
+        return img
+
+    def to_bytes(self) -> bytes:
+        return bytes(self.buf)
+
+    @classmethod
+    def from_bytes(cls, x_size: int, y_size: int, data) -> "ImageData":
+        img = cls(x_size, y_size)
+        if len(data) != len(img.buf):
+            raise ValueError(f"{len(data)} bytes, expected {len(img.buf)}")
+        img.buf[:] = data
+        return img
+
+    def __eq__(self, other) -> bool:
+        return (isinstance(other, ImageData)
+                and (self.x_size, self.y_size) == (other.x_size, other.y_size)
+                and self.buf == other.buf)
+
+    def __repr__(self) -> str:
+        return f"ImageData({self.x_size}, {self.y_size})"
