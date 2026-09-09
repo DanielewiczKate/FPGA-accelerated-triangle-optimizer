@@ -77,7 +77,7 @@ reset_active_level=False,
             await RisingEdge(self.dut.s_axi_aclk)
 
 @cocotb.test()
-async def initilize(dut):
+async def count_sse(dut):
     N = 5
     tri = Triangle(
             Color(1, 0, 0, 255),
@@ -85,33 +85,11 @@ async def initilize(dut):
     max_coord = Vertex(N, N)
 
     tb = TB(dut)
-
-
     await tb.cycle_reset()
     await tb.init_accelerator(max_coord, tri)
     await RisingEdge(tb.dut.s_axi_aclk)
 
-
-    # TODO Reset render to get it ready. This does not work
     await tb.axil_master.write(A_CTRL, 0x2.to_bytes(4, "little"))
-
-    # wait for it to prime. Render_ready is now set
-    await RisingEdge(tb.dut.s_axi_aclk)
-    await RisingEdge(tb.dut.s_axi_aclk)
-
-    # Once we start streaming we should get delta_see coming back. Setting up
-    # a monitor
-    # NOTE: This drops the last value, since pixel_valid is delayed
-    beats = []
-    mon = cocotb.start_soon(
-        monitor(dut, dut.s_axi_aclk,
-        [
-            "delta_sse",
-            ],
-        beats, gate="pixel_valid")
-    )
-
-    await RisingEdge(tb.dut.s_axi_aclk)
 
     # Open up streams, stream in dummy data. By setting both pixels to 0 and
     # the tri col to (1,0,0,255) we can assert correctness by checking
@@ -122,13 +100,6 @@ async def initilize(dut):
     # Why does this take N*N + 3?
     for i in range(N*N + 3):
         await RisingEdge(tb.dut.s_axi_aclk)
-
-
-    beats = [
-        (common.as_signed(sse_acc, 64))
-        for (sse_acc, ) in beats
-    ]
-    dut._log.info(beats);
 
     expected = N*(N+1)/2
     assert expected == common.as_signed(int(dut.rasterizer.t_sse_acc.value), 64)
