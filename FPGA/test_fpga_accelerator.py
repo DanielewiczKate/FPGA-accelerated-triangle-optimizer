@@ -91,10 +91,6 @@ async def initilize(dut):
     await tb.init_accelerator(max_coord, tri)
     await RisingEdge(tb.dut.s_axi_aclk)
 
-    dut.rasterizer.rasterizer_dispatch.rst.value = 0;
-    await RisingEdge(tb.dut.s_axi_aclk)
-    dut.rasterizer.rasterizer_dispatch.rst.value = 1;
-    await RisingEdge(tb.dut.s_axi_aclk)
 
     # TODO Reset render to get it ready. This does not work
     await tb.axil_master.write(A_CTRL, 0x2.to_bytes(4, "little"))
